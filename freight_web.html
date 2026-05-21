@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>운임 견적 계산기</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f0ede6;--surface:#fff;--surface2:#f8f6f1;--border:#dedad0;--border2:#c8c3b5;
+  --text:#18160f;--text2:#6b6555;--text3:#a09887;
+  --krw:#1e3a5f;--jpy:#7a1f1f;--usd:#1f5c1f;--cny:#7a4800;--thb:#4a1a7a;--vnd:#006b5c;
+  --ft20:#5c3a1e;--ft40:#1e3a5c;
+  --green:#2c5f2e;--green-bg:#e8f2e8;--green-bd:#9dca9f;
+  --r:8px;--r-sm:5px;
+  --shadow:0 1px 4px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+
+/* ── 설정 오버레이 ── */
+#setup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center}
+.setup-box{background:var(--surface);border-radius:12px;padding:32px 36px;width:520px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.setup-box h2{font-size:18px;font-weight:700;margin-bottom:6px}
+.setup-box .sub{font-size:13px;color:var(--text2);margin-bottom:24px;line-height:1.6}
+.setup-field{margin-bottom:14px}
+.setup-field label{display:block;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px}
+.setup-field input{width:100%;height:38px;border:1px solid var(--border2);border-radius:var(--r-sm);padding:0 12px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);outline:none;background:var(--surface2)}
+.setup-field input:focus{border-color:#888}
+.setup-field .hint{font-size:11px;color:var(--text3);margin-top:4px}
+.setup-btn{width:100%;height:40px;border:none;border-radius:var(--r-sm);background:var(--text);color:#fff;font-family:'Noto Sans KR',sans-serif;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px}
+.setup-btn:hover{background:#333}
+.setup-err{font-size:12px;color:#c0392b;margin-top:8px;display:none}
+.step-badge{display:inline-block;width:20px;height:20px;border-radius:50%;background:var(--text);color:#fff;font-size:11px;font-weight:700;text-align:center;line-height:20px;margin-right:6px}
+
+/* ── 헤더 ── */
+header{background:var(--text);padding:0 32px;height:56px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:200}
+.logo-mark{width:28px;height:28px;background:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center}
+.logo-mark span{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--text)}
+header h1{font-size:15px;font-weight:600;color:#fff;letter-spacing:-.01em;flex:1}
+.sync-indicator{display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,.5)}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#aaa;transition:background .3s}
+.sync-dot.ok{background:#5cb85c}
+.sync-dot.syncing{background:#f0ad4e;animation:pulse .8s infinite}
+.sync-dot.err{background:#d9534f}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── 메인 ── */
+main{max-width:1200px;margin:0 auto;padding:24px 32px}
+#pane-side ~ * , #pane-side{max-width:none}
+body.side-mode main{max-width:none;padding:24px 24px}
+
+/* ── 탑바 ── */
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;box-shadow:var(--shadow);flex-wrap:wrap}
+.tb-label{font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-right:2px;white-space:nowrap}
+.sep{width:1px;height:28px;background:var(--border);margin:0 4px;flex-shrink:0}
+.cnt-wrap{display:flex;align-items:center;border:1px solid var(--border2);border-radius:var(--r-sm);overflow:hidden;background:var(--surface)}
+.cnt-btn{width:30px;height:30px;border:none;background:var(--surface2);color:var(--text2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .1s}
+.cnt-btn:hover{background:var(--border)}
+.cnt-in{width:48px;height:30px;border:none;outline:none;text-align:center;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;background:transparent;color:var(--text);-moz-appearance:textfield}
+.cnt-in::-webkit-outer-spin-button,.cnt-in::-webkit-inner-spin-button{-webkit-appearance:none}
+
+/* ── 탭 (템플릿 / 견적) ── */
+.tab-bar{display:flex;gap:4px;margin-bottom:16px;position:sticky;top:56px;z-index:100;background:var(--bg);padding:10px 0 6px;margin-left:-32px;margin-right:-32px;padding-left:32px;padding-right:32px;border-bottom:1px solid var(--border)}
+body.side-mode .tab-bar{margin-left:-24px;margin-right:-24px;padding-left:24px;padding-right:24px}
+.tab-btn{padding:8px 18px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-size:13px;font-family:'Noto Sans KR',sans-serif;font-weight:500;cursor:pointer;transition:all .12s}
+.tab-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
+
+/* ── 카드 공통 ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.card-hdr{padding:11px 16px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase}
+.card-hdr .hdr-action{margin-left:auto}
+.card-body{padding:16px}
+
+/* ── 비교 화면 ── */
+.compare-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;min-width:0}
+.compare-pane{min-width:0;overflow:hidden}
+.compare-header{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r) var(--r) 0 0;border-bottom:none;font-size:12px;font-weight:600}
+.compare-header.left{color:var(--text2)}
+.compare-header.right{color:var(--imp);background:var(--imp-bg,#e6eef8);border-color:var(--imp-bd,#9bb8d8)}
+.compare-tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:0 0 var(--r) var(--r);overflow-x:auto;box-shadow:var(--shadow)}
+.compare-tbl-wrap table{width:100%;border-collapse:collapse;table-layout:auto;font-size:12px}
+.compare-tbl-wrap thead tr{background:var(--surface2);border-bottom:1px solid var(--border)}
+.compare-tbl-wrap thead th{padding:6px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--text3);border-right:1px solid var(--border);white-space:nowrap}
+.compare-tbl-wrap thead th:last-child{border-right:none}
+.compare-tbl-wrap tbody tr{border-bottom:1px solid var(--border)}
+.compare-tbl-wrap tbody tr:last-child{border-bottom:none}
+.compare-tbl-wrap tbody td{padding:6px 8px;border-right:1px solid var(--border);white-space:nowrap}
+.compare-tbl-wrap tbody td:last-child{border-right:none;text-align:right;font-family:'JetBrains Mono',monospace}
+.compare-tot{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-top:8px;box-shadow:var(--shadow)}
+.compare-tot .ct-label{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.compare-tot .ct-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:500}
+.diff-badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;margin-left:8px}
+.diff-up{background:#fde8e8;color:#c0392b}
+.diff-dn{background:#e8f2e8;color:#1f5c1f}
+@media(max-width:900px){.compare-wrap{grid-template-columns:1fr}}
+.estimate-list{display:grid;gap:8px}
+.est-item{border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;cursor:pointer;transition:all .12s;background:var(--surface)}
+.est-item:hover{border-color:var(--border2);background:var(--surface2)}
+.est-item.active{border-color:#888;background:var(--surface2)}
+.est-item-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.est-title{font-weight:600;font-size:14px;flex:1}
+.est-meta{font-size:11px;color:var(--text3)}
+.est-actions{display:flex;gap:4px;margin-left:auto}
+.act-btn{height:26px;padding:0 10px;border-radius:4px;border:1px solid var(--border2);background:transparent;font-size:11px;font-family:'Noto Sans KR',sans-serif;cursor:pointer;color:var(--text2);white-space:nowrap}
+.act-btn:hover{background:var(--border)}
+.act-btn.danger:hover{background:#fde8e8;color:#c0392b;border-color:#e8aaaa}
+
+/* ── 템플릿 바 ── */
+.tpl-bar{display:flex;align-items:center;gap:8px;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 18px;box-shadow:var(--shadow);flex-wrap:wrap}
+.tpl-select{height:32px;padding:0 10px;border:1px solid var(--border2);border-radius:var(--r-sm);background:var(--surface2);font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);cursor:pointer;outline:none;min-width:180px;max-width:260px}
+.tpl-name-in{height:32px;padding:0 10px;border:1px solid var(--border2);border-radius:var(--r-sm);background:var(--surface2);font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);outline:none;width:180px}
+.tpl-name-in::placeholder{color:var(--text3)}
+.tpl-name-in:focus{border-color:#888}
+.tpl-btn{height:32px;padding:0 14px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--surface2);font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;white-space:nowrap;transition:all .12s}
+.tpl-btn:hover{background:var(--border);color:var(--text)}
+.tpl-btn.primary{background:var(--text);color:#fff;border-color:var(--text)}
+.tpl-btn.primary:hover{background:#333}
+.tpl-btn.warn{color:#7a4800;border-color:#e8c47a}
+.tpl-btn.warn:hover{background:#fdf0e0}
+.tpl-btn.danger{color:#c0392b;border-color:#e8aaaa}
+.tpl-btn.danger:hover{background:#fde8e8}
+.tpl-sep{width:1px;height:22px;background:var(--border);flex-shrink:0}
+
+/* ── 테이블 ── */
+.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);margin-bottom:16px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;table-layout:fixed;min-width:860px}
+col.c-name{width:16%}col.c-cur{width:7%}
+col.c-p20{width:9%}col.c-q20{width:5%}
+col.c-p40{width:9%}col.c-q40{width:5%}
+col.c-basis{width:8%}col.c-sub{width:13%}col.c-memo{width:16%}col.c-del{width:4%}
+thead tr{background:var(--surface2);border-bottom:1.5px solid var(--border)}
+thead th{padding:0;text-align:left;font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;border-right:1px solid var(--border);white-space:nowrap}
+thead th:last-child{border-right:none;text-align:center}
+.th-inner{padding:7px 8px}
+.th-group-top{font-size:9px;font-weight:700;letter-spacing:.06em;padding:4px 8px 2px;border-bottom:1px solid var(--border)}
+.th-group-cols{display:grid;grid-template-columns:1fr 1fr}
+.th-sub{padding:3px 8px 5px;font-size:10px;color:var(--text3)}
+.th-sub.ft20{color:var(--ft20)}.th-sub.ft40{color:var(--ft40)}
+.th-sub.r{text-align:right}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:#faf9f5}
+td{padding:0;border-right:1px solid var(--border);vertical-align:middle}
+td:last-child{border-right:none}
+.cell-in{width:100%;height:42px;border:none;outline:none;background:transparent;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;color:var(--text);padding:0 8px}
+.cell-in::placeholder{color:var(--text3);font-weight:400}
+.cell-in:focus{background:#f5f3ec}
+.half-in{width:100%;height:42px;border:none;outline:none;background:transparent;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);padding:0 6px;-moz-appearance:textfield;text-align:right}
+.half-in::-webkit-outer-spin-button,.half-in::-webkit-inner-spin-button{-webkit-appearance:none}
+.half-in:focus{background:#f5f3ec}
+.half-in.qty-in{text-align:center;font-weight:600}
+.cell-sel{width:100%;height:42px;border:none;outline:none;background:transparent;font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);padding:0 8px;cursor:pointer}
+.cell-sel:focus{background:#f5f3ec}
+td.sub-cell{text-align:right;padding:0 10px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;white-space:nowrap;vertical-align:middle}
+td.del-cell{text-align:center;vertical-align:middle}
+.del-btn{width:26px;height:26px;border:1px solid var(--border);border-radius:50%;background:transparent;cursor:pointer;color:var(--text3);font-size:12px;transition:all .12s;display:inline-flex;align-items:center;justify-content:center}
+.del-btn:hover{background:#fde8e8;border-color:#e8aaaa;color:#c0392b}
+.add-row{padding:10px 14px;border-top:1px dashed var(--border2)}
+.add-btn{padding:7px 14px;border:1px dashed var(--border2);border-radius:var(--r-sm);background:transparent;color:var(--text3);font-size:12px;font-family:'Noto Sans KR',sans-serif;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:6px}
+.add-btn:hover{background:var(--surface2);color:var(--text2);border-color:var(--text3)}
+
+/* ── 합계 ── */
+.totals-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;box-shadow:var(--shadow)}
+.totals-top{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.totals-top h3{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+.cur-dropdown{height:32px;padding:0 10px;border:1px solid var(--border2);border-radius:var(--r-sm);background:var(--surface2);font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;outline:none}
+.totals-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tot-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px}
+.tot-box .tb-label{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px}
+.tot-box .tb-val{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:500}
+.tot-box .tb-sub{font-size:11px;color:var(--text3);margin-top:3px}
+.c-KRW{color:var(--krw)}.c-JPY{color:var(--jpy)}.c-USD{color:var(--usd)}.c-CNY{color:var(--cny)}.c-THB{color:var(--thb)}.c-VND{color:var(--vnd)}
+.empty-msg{color:var(--text3);font-size:13px;text-align:center;padding:20px 0}
+
+/* ── 견적 저장 모달 ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border-radius:10px;padding:24px 28px;width:400px;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:16px}
+.modal-field{margin-bottom:12px}
+.modal-field label{display:block;font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px}
+.modal-field input,.modal-field textarea{width:100%;border:1px solid var(--border2);border-radius:var(--r-sm);padding:8px 10px;font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);outline:none;background:var(--surface2)}
+.modal-field input:focus,.modal-field textarea:focus{border-color:#888}
+.modal-field textarea{resize:vertical;min-height:60px}
+.modal-btns{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+.modal-btn{height:34px;padding:0 16px;border-radius:var(--r-sm);font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--surface2);color:var(--text2)}
+.modal-btn.ok{background:var(--text);color:#fff;border-color:var(--text)}
+
+/* ── 토스트 ── */
+#toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:#fff;font-size:13px;padding:10px 20px;border-radius:20px;opacity:0;pointer-events:none;transition:all .25s;z-index:999;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.cell-memo{font-size:12px;color:var(--text2);font-style:italic}
+</style>
+</head>
+<body>
+
+<!-- Supabase 설정 오버레이 -->
+<div id="setup-overlay">
+  <div class="setup-box">
+    <h2>🔗 Supabase 연결 설정</h2>
+    <p class="sub">팀원과 데이터를 공유하려면 Supabase 프로젝트 정보가 필요합니다.<br>아래 안내를 따라 무료로 설정하세요. <strong>한 번만 입력하면 저장됩니다.</strong></p>
+
+    <div style="background:#f0f4ff;border:1px solid #c0d0f0;border-radius:6px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:#2c3e6b;line-height:1.8">
+      <b><span class="step-badge">1</span>supabase.com</b> → 무료 가입 → New Project 생성<br>
+      <b><span class="step-badge">2</span>Project Settings → API</b> 탭 클릭<br>
+      <b><span class="step-badge">3</span>Project URL</b>과 <b>anon public key</b>를 아래에 붙여넣기<br>
+      <b><span class="step-badge">4</span>SQL Editor</b>에서 아래 SQL 실행:
+      <pre style="background:#e8eeff;padding:8px;border-radius:4px;margin-top:6px;font-size:11px;overflow-x:auto">CREATE TABLE templates (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  rows jsonb NOT NULL,
+  updated_at timestamptz DEFAULT now()
+);
+CREATE TABLE estimates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  note text,
+  cnt20 int DEFAULT 0,
+  cnt40 int DEFAULT 0,
+  bl int DEFAULT 1,
+  rows jsonb NOT NULL,
+  created_by text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE estimates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_all" ON templates FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);</pre>
+    </div>
+
+    <div class="setup-field">
+      <label>Project URL</label>
+      <input type="text" id="setup-url" placeholder="https://xxxxxxxxxxxx.supabase.co">
+    </div>
+    <div class="setup-field">
+      <label>Anon Public Key</label>
+      <input type="text" id="setup-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+    </div>
+    <div class="setup-field">
+      <label>내 이름 (견적 작성자 표시용)</label>
+      <input type="text" id="setup-name" placeholder="홍길동">
+    </div>
+    <div class="setup-err" id="setup-err"></div>
+    <button class="setup-btn" onclick="connectSupabase()">연결 테스트 &amp; 저장</button>
+  </div>
+</div>
+
+<!-- 템플릿 수정 모달 -->
+<div class="modal-overlay" id="tpl-edit-modal">
+  <div class="modal">
+    <h3>템플릿 수정 저장</h3>
+    <div class="modal-field">
+      <label>템플릿 이름</label>
+      <input type="text" id="tpl-edit-name-in" placeholder="템플릿 이름">
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-top:-4px;margin-bottom:8px">이름을 바꾸면 기존 템플릿은 삭제되고 새 이름으로 저장됩니다</div>
+    <div class="modal-btns">
+      <button class="modal-btn" onclick="closeTplEditModal()">취소</button>
+      <button class="modal-btn ok" onclick="confirmUpdateTemplate()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 견적 저장 모달 -->
+<div class="modal-overlay" id="est-modal">
+  <div class="modal">
+    <h3 id="est-modal-title">견적 저장</h3>
+    <div class="modal-field">
+      <label>견적 제목</label>
+      <input type="text" id="est-title-in" placeholder="예: ABC상사 2025-05 견적">
+    </div>
+    <div class="modal-field">
+      <label>메모 (선택)</label>
+      <textarea id="est-note-in" placeholder="참고 사항 입력..."></textarea>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn" onclick="closeEstModal()">취소</button>
+      <button class="modal-btn ok" onclick="confirmSaveEstimate()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<header>
+  <div class="logo-mark"><span>FC</span></div>
+  <h1>운임 견적 계산기</h1>
+  <div class="sync-indicator">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span id="sync-label">연결 중...</span>
+  </div>
+  <button onclick="openSetup()" style="height:28px;padding:0 12px;border-radius:4px;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.6);font-size:11px;font-family:'Noto Sans KR',sans-serif;cursor:pointer">설정</button>
+</header>
+
+<main>
+  <!-- 탭 -->
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-calc" onclick="switchTab('calc')">📋 현재 견적</button>
+    <button class="tab-btn" id="tab-side" onclick="switchTab('side')">⚖️ 나란히 비교</button>
+    <button class="tab-btn" id="tab-history" onclick="switchTab('history')">📁 저장된 견적</button>
+    <button class="tab-btn" id="tab-compare" onclick="closeCompareTab()" style="display:none">📊 요약 비교: <span id="compare-title-label"></span> ✕</button>
+  </div>
+
+  <!-- 현재 견적 탭 -->
+  <div id="pane-calc">
+    <!-- 템플릿 바 -->
+    <div class="tpl-bar">
+      <span class="tb-label">템플릿</span>
+      <select class="tpl-select" id="tpl-sel">
+        <option value="">— 저장된 템플릿 —</option>
+      </select>
+      <button class="tpl-btn" onclick="loadTemplate()">불러오기</button>
+      <button class="tpl-btn warn" onclick="updateTemplate()">수정 저장</button>
+      <button class="tpl-btn danger" onclick="deleteTemplate()">삭제</button>
+      <div class="tpl-sep"></div>
+      <input class="tpl-name-in" id="tpl-name" placeholder="새 템플릿 이름..." maxlength="40" onkeydown="if(event.key==='Enter') saveTemplate()">
+      <button class="tpl-btn primary" onclick="saveTemplate()">새로 저장</button>
+    </div>
+    <!-- 컨테이너/BL 설정 -->
+    <div class="topbar" style="margin-bottom:16px">
+      <span class="tb-label" style="color:var(--ft20)">20ft</span>
+      <div class="cnt-wrap">
+        <button class="cnt-btn" onclick="adj('c20',-1)">−</button>
+        <input class="cnt-in" type="number" id="cnt-20" value="1" min="0" max="99" oninput="render()">
+        <button class="cnt-btn" onclick="adj('c20',1)">+</button>
+      </div>
+      <span class="tb-label" style="color:var(--ft40)">40ft</span>
+      <div class="cnt-wrap">
+        <button class="cnt-btn" onclick="adj('c40',-1)">−</button>
+        <input class="cnt-in" type="number" id="cnt-40" value="1" min="0" max="99" oninput="render()">
+        <button class="cnt-btn" onclick="adj('c40',1)">+</button>
+      </div>
+      <div class="sep"></div>
+      <span class="tb-label">B/L</span>
+      <div class="cnt-wrap">
+        <button class="cnt-btn" onclick="adj('bl',-1)">−</button>
+        <input class="cnt-in" type="number" id="bl-cnt" value="1" min="1" max="99" oninput="render()">
+        <button class="cnt-btn" onclick="adj('bl',1)">+</button>
+      </div>
+    </div>
+
+    <!-- 항목 테이블 -->
+    <div class="tbl-wrap">
+      <table>
+        <colgroup>
+          <col class="c-name"><col class="c-cur">
+          <col class="c-p20"><col class="c-q20">
+          <col class="c-p40"><col class="c-q40">
+          <col class="c-basis"><col class="c-sub"><col class="c-memo"><col class="c-del">
+        </colgroup>
+        <thead>
+          <tr>
+            <th rowspan="2"><div class="th-inner">항목명</div></th>
+            <th rowspan="2"><div class="th-inner">통화</div></th>
+            <th colspan="2" style="padding:0">
+              <div class="th-group-top" style="color:var(--ft20)">20ft</div>
+              <div class="th-group-cols">
+                <div class="th-sub ft20 r">단가</div>
+                <div class="th-sub ft20" style="text-align:center">수량</div>
+              </div>
+            </th>
+            <th colspan="2" style="padding:0">
+              <div class="th-group-top" style="color:var(--ft40)">40ft</div>
+              <div class="th-group-cols">
+                <div class="th-sub ft40 r">단가</div>
+                <div class="th-sub ft40" style="text-align:center">수량</div>
+              </div>
+            </th>
+            <th rowspan="2"><div class="th-inner">기준</div></th>
+            <th rowspan="2" style="text-align:right"><div class="th-inner" style="text-align:right">소계</div></th>
+            <th rowspan="2"><div class="th-inner">메모</div></th>
+            <th rowspan="2"></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="add-row">
+        <button class="add-btn" onclick="addRow()">＋ 항목 추가</button>
+      </div>
+    </div>
+
+    <!-- 합계 + 견적 저장 -->
+    <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+      <div class="totals-card" style="flex:1;min-width:300px">
+        <div class="totals-top">
+          <h3>합계 및 평균</h3>
+          <select class="cur-dropdown" id="cur-sel" onchange="renderTotals()">
+            <option value="">— 통화 선택 —</option>
+          </select>
+        </div>
+        <div id="totals-body"><div class="empty-msg">항목을 입력하면 합계가 표시됩니다</div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;min-width:160px">
+        <button onclick="openSaveEstimate()" style="height:42px;padding:0 20px;border-radius:var(--r-sm);border:none;background:var(--text);color:#fff;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:600;cursor:pointer">💾 견적 저장</button>
+        <button onclick="clearRows()" style="height:36px;padding:0 20px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-family:'Noto Sans KR',sans-serif;font-size:12px;cursor:pointer">새 견적 작성</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 나란히 비교 탭 -->
+  <div id="pane-side" style="display:none">
+    <!-- 좌우 각각 컨테이너/BL 설정 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
+
+      <!-- 왼쪽 설정 -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;box-shadow:var(--shadow)">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">◀ 왼쪽 견적</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="tb-label" style="color:var(--ft20)">20ft</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="sadj('L','c20',-1)">−</button><input class="cnt-in" id="sL-20" type="number" value="1" min="0" max="99" oninput="renderSide('L')"><button class="cnt-btn" onclick="sadj('L','c20',1)">+</button></div>
+          <span class="tb-label" style="color:var(--ft40)">40ft</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="sadj('L','c40',-1)">−</button><input class="cnt-in" id="sL-40" type="number" value="1" min="0" max="99" oninput="renderSide('L')"><button class="cnt-btn" onclick="sadj('L','c40',1)">+</button></div>
+          <span class="tb-label">B/L</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="sadj('L','bl',-1)">−</button><input class="cnt-in" id="sL-bl" type="number" value="1" min="1" max="99" oninput="renderSide('L')"><button class="cnt-btn" onclick="sadj('L','bl',1)">+</button></div>
+          <select class="tpl-select" id="sL-tpl" style="height:30px;font-size:12px;margin-left:4px" onchange="loadSideTpl('L')"><option value="">— 템플릿 —</option></select>
+          <button class="tpl-btn" style="height:30px;font-size:11px" onclick="clearSide('L')">초기화</button>
+        </div>
+      </div>
+
+      <!-- 오른쪽 설정 -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;box-shadow:var(--shadow)">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">▶ 오른쪽 견적</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="tb-label" style="color:var(--ft20)">20ft</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="sadj('R','c20',-1)">−</button><input class="cnt-in" id="sR-20" type="number" value="1" min="0" max="99" oninput="renderSide('R')"><button class="cnt-btn" onclick="sadj('R','c40',1)">+</button></div>
+          <span class="tb-label" style="color:var(--ft40)">40ft</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="sadj('R','c40',-1)">−</button><input class="cnt-in" id="sR-40" type="number" value="1" min="0" max="99" oninput="renderSide('R')"><button class="cnt-btn" onclick="sadj('R','c40',1)">+</button></div>
+          <span class="tb-label">B/L</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="sadj('R','bl',-1)">−</button><input class="cnt-in" id="sR-bl" type="number" value="1" min="1" max="99" oninput="renderSide('R')"><button class="cnt-btn" onclick="sadj('R','bl',1)">+</button></div>
+          <select class="tpl-select" id="sR-tpl" style="height:30px;font-size:12px;margin-left:4px" onchange="loadSideTpl('R')"><option value="">— 템플릿 —</option></select>
+          <button class="tpl-btn" style="height:30px;font-size:11px" onclick="clearSide('R')">초기화</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 좌우 견적 입력 테이블 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+      <!-- 왼쪽 테이블 -->
+      <div>
+        <div class="tbl-wrap" style="margin-bottom:8px">
+          <table style="min-width:0">
+            <colgroup><col style="width:22%"><col style="width:8%"><col style="width:14%"><col style="width:14%"><col style="width:10%"><col style="width:14%"><col style="width:5%"></colgroup>
+            <thead>
+              <tr>
+                <th rowspan="2"><div class="th-inner">항목명</div></th>
+                <th rowspan="2"><div class="th-inner">통화</div></th>
+                <th style="padding:0;border-bottom:none">
+                  <div class="th-group-top" style="color:var(--ft20)">20ft 단가</div>
+                </th>
+                <th style="padding:0;border-bottom:none">
+                  <div class="th-group-top" style="color:var(--ft40)">40ft 단가</div>
+                </th>
+                <th rowspan="2"><div class="th-inner">기준</div></th>
+                <th rowspan="2" style="text-align:right"><div class="th-inner" style="text-align:right">소계</div></th>
+                <th rowspan="2"></th>
+              </tr>
+            </thead>
+            <tbody id="sL-rows"></tbody>
+          </table>
+          <div class="add-row"><button class="add-btn" onclick="addSideRow('L')">＋ 항목 추가</button></div>
+        </div>
+        <!-- 왼쪽 합계 -->
+        <div class="totals-card">
+          <div class="totals-top">
+            <h3>합계 및 평균</h3>
+            <select class="cur-dropdown" id="sL-cur" onchange="renderSideTotals('L')"><option value="">— 통화 —</option></select>
+          </div>
+          <div id="sL-tot"><div class="empty-msg">항목을 추가하세요</div></div>
+        </div>
+      </div>
+
+      <!-- 오른쪽 테이블 -->
+      <div>
+        <div class="tbl-wrap" style="margin-bottom:8px">
+          <table style="min-width:0">
+            <colgroup><col style="width:22%"><col style="width:8%"><col style="width:14%"><col style="width:14%"><col style="width:10%"><col style="width:14%"><col style="width:5%"></colgroup>
+            <thead>
+              <tr>
+                <th rowspan="2"><div class="th-inner">항목명</div></th>
+                <th rowspan="2"><div class="th-inner">통화</div></th>
+                <th style="padding:0;border-bottom:none">
+                  <div class="th-group-top" style="color:var(--ft20)">20ft 단가</div>
+                </th>
+                <th style="padding:0;border-bottom:none">
+                  <div class="th-group-top" style="color:var(--ft40)">40ft 단가</div>
+                </th>
+                <th rowspan="2"><div class="th-inner">기준</div></th>
+                <th rowspan="2" style="text-align:right"><div class="th-inner" style="text-align:right">소계</div></th>
+                <th rowspan="2"></th>
+              </tr>
+            </thead>
+            <tbody id="sR-rows"></tbody>
+          </table>
+          <div class="add-row"><button class="add-btn" onclick="addSideRow('R')">＋ 항목 추가</button></div>
+        </div>
+        <!-- 오른쪽 합계 -->
+        <div class="totals-card">
+          <div class="totals-top">
+            <h3>합계 및 평균</h3>
+            <select class="cur-dropdown" id="sR-cur" onchange="renderSideTotals('R')"><option value="">— 통화 —</option></select>
+          </div>
+          <div id="sR-tot"><div class="empty-msg">항목을 추가하세요</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 차이 요약 -->
+    <div id="side-diff" style="margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;box-shadow:var(--shadow);font-size:13px;display:none"></div>
+  </div>
+
+  <!-- 저장된 견적 탭 -->
+  <div id="pane-history" style="display:none">
+    <div class="card">
+      <div class="card-hdr">
+        저장된 견적 목록
+        <span class="hdr-action" style="display:flex;gap:8px;align-items:center">
+          <input id="est-search" type="text" placeholder="🔍 제목 · 메모 검색..." oninput="filterEstimates()"
+            style="height:28px;padding:0 10px;border:1px solid var(--border2);border-radius:var(--r-sm);background:var(--surface);font-family:'Noto Sans KR',sans-serif;font-size:12px;color:var(--text);outline:none;width:220px">
+          <button class="act-btn" onclick="loadEstimates()">🔄 새로고침</button>
+        </span>
+      </div>
+      <div class="card-body">
+        <div id="est-list"><div class="empty-msg">저장된 견적이 없습니다</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 비교 탭 (편집 가능한 나란히 비교) -->
+  <div id="pane-compare" style="display:none">
+    <!-- 좌우 설정 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
+      <!-- 왼쪽 -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;box-shadow:var(--shadow)">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">📋 현재 견적</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="tb-label" style="color:var(--ft20)">20ft</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="cadj('L','c20',-1)">−</button><input class="cnt-in" id="cL-20" type="number" value="1" min="0" max="99" oninput="renderCmp('L')"><button class="cnt-btn" onclick="cadj('L','c20',1)">+</button></div>
+          <span class="tb-label" style="color:var(--ft40)">40ft</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="cadj('L','c40',-1)">−</button><input class="cnt-in" id="cL-40" type="number" value="1" min="0" max="99" oninput="renderCmp('L')"><button class="cnt-btn" onclick="cadj('L','c40',1)">+</button></div>
+          <span class="tb-label">B/L</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="cadj('L','bl',-1)">−</button><input class="cnt-in" id="cL-bl" type="number" value="1" min="1" max="99" oninput="renderCmp('L')"><button class="cnt-btn" onclick="cadj('L','bl',1)">+</button></div>
+          <select class="tpl-select" id="cL-tpl" style="height:30px;font-size:12px;margin-left:4px" onchange="loadCmpTpl('L')"><option value="">— 템플릿 —</option></select>
+        </div>
+      </div>
+      <!-- 오른쪽 -->
+      <div style="background:var(--surface);border:1px solid #9bb8d8;border-radius:var(--r);padding:12px 16px;box-shadow:var(--shadow);background:var(--imp-bg,#e6eef8)">
+        <div style="font-size:11px;font-weight:600;color:var(--imp,#1e3a5f);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">📁 <span id="cmp-right-label">저장된 견적</span></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="tb-label" style="color:var(--ft20)">20ft</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="cadj('R','c20',-1)">−</button><input class="cnt-in" id="cR-20" type="number" value="1" min="0" max="99" oninput="renderCmp('R')"><button class="cnt-btn" onclick="cadj('R','c20',1)">+</button></div>
+          <span class="tb-label" style="color:var(--ft40)">40ft</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="cadj('R','c40',-1)">−</button><input class="cnt-in" id="cR-40" type="number" value="1" min="0" max="99" oninput="renderCmp('R')"><button class="cnt-btn" onclick="cadj('R','c40',1)">+</button></div>
+          <span class="tb-label">B/L</span>
+          <div class="cnt-wrap"><button class="cnt-btn" onclick="cadj('R','bl',-1)">−</button><input class="cnt-in" id="cR-bl" type="number" value="1" min="1" max="99" oninput="renderCmp('R')"><button class="cnt-btn" onclick="cadj('R','bl',1)">+</button></div>
+          <select class="tpl-select" id="cR-tpl" style="height:30px;font-size:12px;margin-left:4px" onchange="loadCmpTpl('R')"><option value="">— 템플릿 —</option></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 좌우 입력 테이블 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <!-- 왼쪽 -->
+      <div>
+        <div class="tbl-wrap" style="margin-bottom:8px">
+          <table style="min-width:0">
+            <colgroup><col style="width:22%"><col style="width:8%"><col style="width:15%"><col style="width:15%"><col style="width:10%"><col style="width:14%"><col style="width:5%"></colgroup>
+            <thead><tr>
+              <th rowspan="2"><div class="th-inner">항목명</div></th>
+              <th rowspan="2"><div class="th-inner">통화</div></th>
+              <th style="padding:0;border-bottom:none"><div class="th-group-top" style="color:var(--ft20)">20ft 단가</div></th>
+              <th style="padding:0;border-bottom:none"><div class="th-group-top" style="color:var(--ft40)">40ft 단가</div></th>
+              <th rowspan="2"><div class="th-inner">기준</div></th>
+              <th rowspan="2" style="text-align:right"><div class="th-inner" style="text-align:right">소계</div></th>
+              <th rowspan="2"></th>
+            </tr></thead>
+            <tbody id="cL-rows"></tbody>
+          </table>
+          <div class="add-row"><button class="add-btn" onclick="addCmpRow('L')">＋ 항목 추가</button></div>
+        </div>
+        <div class="totals-card">
+          <div class="totals-top"><h3>합계 및 평균</h3>
+            <select class="cur-dropdown" id="cL-cur" onchange="renderCmpTotals('L')"><option value="">— 통화 —</option></select>
+          </div>
+          <div id="cL-tot"><div class="empty-msg">항목을 추가하세요</div></div>
+        </div>
+      </div>
+      <!-- 오른쪽 -->
+      <div>
+        <div class="tbl-wrap" style="margin-bottom:8px">
+          <table style="min-width:0">
+            <colgroup><col style="width:22%"><col style="width:8%"><col style="width:15%"><col style="width:15%"><col style="width:10%"><col style="width:14%"><col style="width:5%"></colgroup>
+            <thead><tr>
+              <th rowspan="2"><div class="th-inner">항목명</div></th>
+              <th rowspan="2"><div class="th-inner">통화</div></th>
+              <th style="padding:0;border-bottom:none"><div class="th-group-top" style="color:var(--ft20)">20ft 단가</div></th>
+              <th style="padding:0;border-bottom:none"><div class="th-group-top" style="color:var(--ft40)">40ft 단가</div></th>
+              <th rowspan="2"><div class="th-inner">기준</div></th>
+              <th rowspan="2" style="text-align:right"><div class="th-inner" style="text-align:right">소계</div></th>
+              <th rowspan="2"></th>
+            </tr></thead>
+            <tbody id="cR-rows"></tbody>
+          </table>
+          <div class="add-row"><button class="add-btn" onclick="addCmpRow('R')">＋ 항목 추가</button></div>
+        </div>
+        <div class="totals-card">
+          <div class="totals-top"><h3>합계 및 평균</h3>
+            <select class="cur-dropdown" id="cR-cur" onchange="renderCmpTotals('R')"><option value="">— 통화 —</option></select>
+          </div>
+          <div id="cR-tot"><div class="empty-msg">항목을 추가하세요</div></div>
+        </div>
+      </div>
+    </div>
+    <!-- 차이 요약 -->
+    <div id="cmp-diff" style="margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;box-shadow:var(--shadow);font-size:13px;display:none"></div>
+  </div>
+</main>
+
+<script>
+/* ══════════════════════════════════════════
+   CONFIG & STATE
+══════════════════════════════════════════ */
+const CFG_KEY = 'freight_supabase_cfg';
+const CURRENCIES=['KRW','JPY','USD','CNY','THB','VND'];
+const CUR_SYM={KRW:'₩',JPY:'¥',USD:'$',CNY:'¥',THB:'฿',VND:'₫'};
+const CUR_NAME={KRW:'원화 KRW',JPY:'엔화 JPY',USD:'달러 USD',CNY:'인민폐 CNY',THB:'바트 THB',VND:'동 VND'};
+const CUR_DEC={KRW:0,JPY:0,USD:2,CNY:2,THB:2,VND:0};
+
+let SB_URL='', SB_KEY='', MY_NAME='익명';
+let rows=[
+  {name:'THC',cur:'KRW',p20:150000,q20:0,p40:180000,q40:0,basis:'CTN',price:0,memo:''},
+  {name:'DOL (Document)',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'BL',price:50000,memo:''},
+  {name:'O/F',cur:'USD',p20:700,q20:0,p40:850,q40:0,basis:'CTN',price:0,memo:''},
+];
+let editingEstId = null;
+
+/* ══════════════════════════════════════════
+   SUPABASE HELPERS
+══════════════════════════════════════════ */
+function sbHeaders(){ return {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY} }
+
+async function sbGet(table, query=''){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}${query}`, {headers:{...sbHeaders(),'Accept':'application/json'}});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbUpsert(table, data){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
+    method:'POST', headers:{...sbHeaders(),'Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify(data)
+  });
+  if(!r.ok) throw new Error(await r.text());
+  return r.status;
+}
+async function sbPatch(table, id, data){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, {
+    method:'PATCH', headers:sbHeaders(), body:JSON.stringify(data)
+  });
+  if(!r.ok) throw new Error(await r.text());
+}
+async function sbDelete(table, id){
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, {
+    method:'DELETE', headers:sbHeaders()
+  });
+  if(!r.ok) throw new Error(await r.text());
+}
+
+/* ══════════════════════════════════════════
+   SETUP
+══════════════════════════════════════════ */
+function openSetup(){
+  const cfg = loadCfg();
+  document.getElementById('setup-url').value = cfg.url||'';
+  document.getElementById('setup-key').value = cfg.key||'';
+  document.getElementById('setup-name').value = cfg.name||'';
+  document.getElementById('setup-overlay').style.display='flex';
+}
+function loadCfg(){try{return JSON.parse(localStorage.getItem(CFG_KEY))||{};}catch{return{};}}
+function saveCfg(cfg){localStorage.setItem(CFG_KEY,JSON.stringify(cfg));}
+
+async function connectSupabase(){
+  const url = document.getElementById('setup-url').value.trim().replace(/\/$/,'');
+  const key = document.getElementById('setup-key').value.trim();
+  const name = document.getElementById('setup-name').value.trim()||'익명';
+  const errEl = document.getElementById('setup-err');
+  errEl.style.display='none';
+  if(!url||!key){errEl.textContent='URL과 Key를 모두 입력해 주세요.';errEl.style.display='block';return;}
+  setSyncState('syncing','연결 확인 중...');
+  SB_URL=url; SB_KEY=key; MY_NAME=name;
+  try {
+    await sbGet('templates','?limit=1');
+    saveCfg({url,key,name});
+    document.getElementById('setup-overlay').style.display='none';
+    setSyncState('ok','연결됨');
+    showToast('Supabase 연결 성공!');
+    await loadTemplatesFromDB();
+  } catch(e) {
+    errEl.textContent='연결 실패: '+e.message+' — URL/Key를 확인하고 SQL을 실행했는지 확인하세요.';
+    errEl.style.display='block';
+    setSyncState('err','연결 실패');
+  }
+}
+
+function setSyncState(state, label){
+  const dot=document.getElementById('sync-dot');
+  const lbl=document.getElementById('sync-label');
+  dot.className='sync-dot '+state;
+  lbl.textContent=label;
+}
+
+/* ══════════════════════════════════════════
+   UTILS
+══════════════════════════════════════════ */
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function fmt(n,cur){const d=CUR_DEC[cur]??2;return new Intl.NumberFormat('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n)}
+function getC20(){return Math.max(0,parseInt(document.getElementById('cnt-20').value)||0)}
+function getC40(){return Math.max(0,parseInt(document.getElementById('cnt-40').value)||0)}
+function getBl(){return Math.max(1,parseInt(document.getElementById('bl-cnt').value)||1)}
+function getTotalCtn(){return getC20()+getC40()}
+function rowSub(r){
+  if(r.basis==='BL') return r.price*getBl();
+  return r.p20*getC20()+r.p40*getC40();
+}
+function calcTotals(){const t={};CURRENCIES.forEach(c=>t[c]=0);rows.forEach(r=>{t[r.cur]=(t[r.cur]||0)+rowSub(r)});return t}
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._tid);t._tid=setTimeout(()=>t.classList.remove('show'),2500);
+}
+function adj(type,delta){
+  const ids={c20:'cnt-20',c40:'cnt-40',bl:'bl-cnt'};
+  const el=document.getElementById(ids[type]);
+  const min=type==='bl'?1:0;
+  el.value=Math.max(min,Math.min(99,(parseInt(el.value)||0)+delta));
+  render();
+}
+function switchTab(tab){
+  document.getElementById('pane-calc').style.display    = tab==='calc'    ?'block':'none';
+  document.getElementById('pane-side').style.display    = tab==='side'    ?'block':'none';
+  document.getElementById('pane-history').style.display = tab==='history' ?'block':'none';
+  document.getElementById('pane-compare').style.display = tab==='compare' ?'block':'none';
+  document.getElementById('tab-calc').className    = 'tab-btn'+(tab==='calc'    ?' active':'');
+  document.getElementById('tab-side').className    = 'tab-btn'+(tab==='side'    ?' active':'');
+  document.getElementById('tab-history').className = 'tab-btn'+(tab==='history' ?' active':'');
+  document.getElementById('tab-compare').className = 'tab-btn'+(tab==='compare' ?' active':'');
+  // 나란히 비교 탭이면 full width
+  document.body.classList.toggle('side-mode', tab==='side');
+  if(tab==='history') loadEstimates();
+  if(tab==='compare') renderCompare();
+  if(tab==='side')    refreshSideTplSelects();
+}
+
+/* ══════════════════════════════════════════
+   나란히 비교 (SIDE BY SIDE)
+══════════════════════════════════════════ */
+let sideRows = {
+  L: [{name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}],
+  R: [{name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}]
+};
+
+function sGetC20(s){ return Math.max(0,parseInt(document.getElementById('s'+s+'-20').value)||0); }
+function sGetC40(s){ return Math.max(0,parseInt(document.getElementById('s'+s+'-40').value)||0); }
+function sGetBl(s){  return Math.max(1,parseInt(document.getElementById('s'+s+'-bl').value)||1); }
+function sGetCtn(s){ return sGetC20(s)+sGetC40(s); }
+function sRowSub(r,s){
+  if(r.basis==='BL') return r.price*sGetBl(s);
+  return r.p20*sGetC20(s)+r.p40*sGetC40(s);
+}
+function sCalcTotals(s){
+  const t={};CURRENCIES.forEach(c=>t[c]=0);
+  sideRows[s].forEach(r=>{t[r.cur]=(t[r.cur]||0)+sRowSub(r,s)});
+  return t;
+}
+
+function sadj(s,type,delta){
+  const ids={c20:'s'+s+'-20',c40:'s'+s+'-40',bl:'s'+s+'-bl'};
+  const el=document.getElementById(ids[type]);
+  const min=type==='bl'?1:0;
+  el.value=Math.max(min,Math.min(99,(parseInt(el.value)||0)+delta));
+  renderSide(s);
+}
+
+function addSideRow(s){
+  sideRows[s].push({name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0});
+  renderSide(s);
+  setTimeout(()=>{
+    const els=document.querySelectorAll('#s'+s+'-rows .s-name-in');
+    if(els.length) els[els.length-1].focus();
+  },30);
+}
+function delSideRow(s,i){ sideRows[s].splice(i,1); renderSide(s); }
+function onSF(s,i,f,v){
+  sideRows[s][i][f]=['p20','p40','price'].includes(f)?(parseFloat(v)||0):v;
+  renderSideTotals(s);
+  renderSideDiff();
+}
+
+function clearSide(s){
+  sideRows[s]=[{name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}];
+  renderSide(s);
+}
+
+function refreshSideTplSelects(){
+  ['L','R'].forEach(s=>{
+    const el=document.getElementById('s'+s+'-tpl');
+    const names=Object.keys(templates).sort();
+    el.innerHTML='<option value="">— 템플릿 —</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  });
+}
+
+function loadSideTpl(s){
+  const name=document.getElementById('s'+s+'-tpl').value;
+  if(!name) return;
+  const tpl=templates[name];
+  if(!tpl) return;
+  sideRows[s]=JSON.parse(JSON.stringify(tpl.rows));
+  renderSide(s);
+  showToast(`"${name}" 불러왔습니다`);
+}
+
+function renderSide(s){
+  const tbody=document.getElementById('s'+s+'-rows');
+  const c20=sGetC20(s), c40=sGetC40(s);
+  if(!sideRows[s].length){
+    tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3);font-size:12px">항목을 추가하세요</td></tr>`;
+    renderSideTotals(s); return;
+  }
+  tbody.innerHTML=sideRows[s].map((r,i)=>{
+    const sub=sRowSub(r,s);
+    const curOpts=CURRENCIES.map(c=>`<option value="${c}"${c===r.cur?' selected':''}>${c}</option>`).join('');
+    const isCTN=r.basis==='CTN';
+    const priceCells=isCTN
+      ?`<td style="padding:0"><input class="half-in" type="number" value="${r.p20||''}" placeholder="—" min="0" step="any" style="height:36px;font-size:12px" oninput="onSF('${s}',${i},'p20',this.value)"></td>
+        <td style="padding:0"><input class="half-in" type="number" value="${r.p40||''}" placeholder="—" min="0" step="any" style="height:36px;font-size:12px" oninput="onSF('${s}',${i},'p40',this.value)"></td>`
+      :`<td colspan="2" style="padding:0 8px;vertical-align:middle">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-size:9px;color:var(--text3);white-space:nowrap">B/L 단가</span>
+            <input class="half-in" type="number" value="${r.price||''}" placeholder="0" min="0" step="any" style="flex:1;height:36px;font-size:12px;text-align:right" oninput="onSF('${s}',${i},'price',this.value)">
+          </div>
+        </td>`;
+    return `<tr>
+      <td><input class="cell-in s-name-in" value="${esc(r.name)}" placeholder="항목명" style="height:36px;font-size:12px" oninput="sideRows['${s}'][${i}].name=this.value"></td>
+      <td><select class="cell-sel" style="height:36px;font-size:12px" onchange="onSF('${s}',${i},'cur',this.value)">${curOpts}</select></td>
+      ${priceCells}
+      <td><select class="cell-sel" style="height:36px;font-size:12px" onchange="onSF('${s}',${i},'basis',this.value);renderSide('${s}')">
+        <option value="CTN"${r.basis==='CTN'?' selected':''}>컨테이너</option>
+        <option value="BL"${r.basis==='BL'?' selected':''}>B/L</option>
+      </select></td>
+      <td class="sub-cell" style="font-size:12px"><span class="c-${r.cur}">${CUR_SYM[r.cur]} ${fmt(sub,r.cur)}</span></td>
+      <td class="del-cell"><button class="del-btn" onclick="delSideRow('${s}',${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+  renderSideTotals(s);
+  renderSideDiff();
+}
+
+function updateSideCurDropdown(s, active){
+  const sel=document.getElementById('s'+s+'-cur');
+  const prev=sel.value;
+  sel.innerHTML='<option value="">— 통화 —</option>'+CURRENCIES.map(c=>`<option value="${c}">${CUR_NAME[c]}</option>`).join('');
+  if(prev&&CURRENCIES.includes(prev)) sel.value=prev;
+  else if(active.length) sel.value=active[0];
+}
+
+function renderSideTotals(s){
+  const t=sCalcTotals(s);
+  const active=CURRENCIES.filter(c=>t[c]>0);
+  const ctn=sGetCtn(s)||1;
+  updateSideCurDropdown(s,active);
+  const body=document.getElementById('s'+s+'-tot');
+  const toCur=document.getElementById('s'+s+'-cur').value;
+  if(!active.length||!toCur){body.innerHTML='<div class="empty-msg">항목을 추가하세요</div>';return;}
+  const sym=CUR_SYM[toCur];
+  let total=0,canConvert=true;
+  for(const cur of active){
+    if(cur===toCur){total+=t[cur];continue;}
+    const c=convertTo(t[cur],cur,toCur);
+    if(c===null){canConvert=false;break;}
+    total+=c;
+  }
+  if(!canConvert||!fxLoaded){
+    // 단일 통화면 그냥 표시
+    if(active.length===1){
+      const cur=active[0];
+      body.innerHTML=`<div class="totals-row">
+        <div class="tot-box"><div class="tb-label">총합계</div><div class="tb-val c-${cur}">${CUR_SYM[cur]} ${fmt(t[cur],cur)}</div></div>
+        <div class="tot-box"><div class="tb-label">컨테이너당 평균</div><div class="tb-val c-${cur}">${CUR_SYM[cur]} ${fmt(t[cur]/ctn,cur)}</div></div>
+      </div>`;
+    } else {
+      body.innerHTML='<div class="empty-msg" style="color:#c0392b">환율 로드 필요</div>';
+    }
+    return;
+  }
+  const avg=total/ctn;
+  const breakdown=active.map(cur=>{
+    if(cur===toCur) return `<span class="c-${cur}">${CUR_SYM[cur]} ${fmt(t[cur],cur)}</span>`;
+    const conv=convertTo(t[cur],cur,toCur);
+    return `<span class="c-${cur}">${CUR_SYM[cur]} ${fmt(t[cur],cur)}</span><span style="color:var(--text3);font-size:10px"> → ${sym} ${fmt(conv,toCur)}</span>`;
+  }).join('<br>');
+  body.innerHTML=`<div class="totals-row">
+    <div class="tot-box">
+      <div class="tb-label">총합계 (${toCur})</div>
+      <div class="tb-val c-${toCur}">${sym} ${fmt(total,toCur)}</div>
+      <div class="tb-sub" style="line-height:1.6">${breakdown}</div>
+    </div>
+    <div class="tot-box">
+      <div class="tb-label">컨테이너당 평균</div>
+      <div class="tb-val c-${toCur}">${sym} ${fmt(avg,toCur)}</div>
+      <div class="tb-sub">총합 ÷ ${ctn}대</div>
+    </div>
+  </div>`;
+  renderSideDiff();
+}
+
+function renderSideDiff(){
+  const diffEl=document.getElementById('side-diff');
+  if(!fxLoaded){diffEl.style.display='none';return;}
+  function toUSD(s){
+    const t=sCalcTotals(s);let usd=0;
+    CURRENCIES.forEach(c=>{if(!t[c])return;const r=convertTo(t[c],c,'USD');if(r!==null)usd+=r;});
+    return usd;
+  }
+  const lUSD=toUSD('L'), rUSD=toUSD('R');
+  if(!lUSD&&!rUSD){diffEl.style.display='none';return;}
+  const diff=lUSD-rUSD;
+  const pct=rUSD?((diff/rUSD)*100).toFixed(1):'—';
+  const badge=diff>0
+    ?`<span class="diff-badge diff-up">왼쪽이 $${fmt(Math.abs(diff),'USD')} 더 비쌈 (+${pct}%)</span>`
+    :diff<0
+    ?`<span class="diff-badge diff-dn">왼쪽이 $${fmt(Math.abs(diff),'USD')} 더 저렴 (${pct}%)</span>`
+    :`<span class="diff-badge" style="background:var(--surface2);color:var(--text2)">동일</span>`;
+  diffEl.style.display='block';
+  diffEl.innerHTML=`<b>차이 요약 (USD 환산)</b> &nbsp; 왼쪽 <b>$${fmt(lUSD,'USD')}</b> vs 오른쪽 <b>$${fmt(rUSD,'USD')}</b> &nbsp; ${badge} <span style="font-size:11px;color:var(--text3);margin-left:6px">${fxTime}</span>`;
+}
+
+/* ══════════════════════════════════════════
+   ROW EDITING
+══════════════════════════════════════════ */
+function addRow(){
+  rows.push({name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:''});
+  render();
+  setTimeout(()=>{const els=document.querySelectorAll('.cell-name-in');if(els.length)els[els.length-1].focus();},30);
+}
+function delRow(i){rows.splice(i,1);render()}
+function clearRows(){if(!confirm('현재 견적을 모두 지울까요?'))return;rows=[];editingEstId=null;render();}
+function onF(i,f,v){
+  rows[i][f]=['p20','q20','p40','q40','price'].includes(f)?(parseFloat(v)||0):v;
+  renderTotals();
+}
+function onNameEnter(i){
+  const els=document.querySelectorAll('.cell-name-in');
+  if(i+1<els.length){els[i+1].focus();return;} addRow();
+}
+function buildPriceOrder(){
+  const order=[];
+  rows.forEach((r,i)=>{
+    if(r.basis==='CTN'){
+      const p20=document.querySelector(`.p20-in-${i}`);
+      const p40=document.querySelector(`.p40-in-${i}`);
+      if(p20)order.push(p20); if(p40)order.push(p40);
+    } else {
+      const bl=document.querySelector(`.bl-price-in-${i}`);
+      if(bl)order.push(bl);
+    }
+  });
+  return order;
+}
+function onPriceEnter(el){
+  const order=buildPriceOrder();
+  const idx=order.indexOf(el);
+  if(idx===-1)return;
+  if(idx+1<order.length){order[idx+1].focus();return;}
+  addRow();
+}
+
+function render(){
+  const tbody=document.getElementById('rows');
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text3);font-size:13px">항목을 추가하세요</td></tr>';
+    renderTotals();return;
+  }
+  tbody.innerHTML=rows.map((r,i)=>{
+    const sub=rowSub(r);
+    const curOpts=CURRENCIES.map(c=>`<option value="${c}"${c===r.cur?' selected':''}>${c}</option>`).join('');
+    const isCTN=r.basis==='CTN';
+    const c20=getC20(),c40=getC40();
+    const priceCells=isCTN
+      ?`<td style="padding:0"><input class="half-in p20-in p20-in-${i}" type="number" value="${r.p20||''}" placeholder="—" min="0" step="any" oninput="onF(${i},'p20',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();onPriceEnter(this)}"></td>
+        <td style="padding:0"><input class="half-in qty-in f20" type="number" value="${c20}" readonly tabindex="-1" style="opacity:.35;cursor:not-allowed;pointer-events:none"></td>
+        <td style="padding:0"><input class="half-in p40-in p40-in-${i}" type="number" value="${r.p40||''}" placeholder="—" min="0" step="any" oninput="onF(${i},'p40',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();onPriceEnter(this)}"></td>
+        <td style="padding:0"><input class="half-in qty-in f40" type="number" value="${c40}" readonly tabindex="-1" style="opacity:.35;cursor:not-allowed;pointer-events:none"></td>`
+      :`<td colspan="4" style="padding:0 10px;vertical-align:middle">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;color:var(--text3);white-space:nowrap">B/L 단가</span>
+            <input class="half-in bl-price-in bl-price-in-${i}" type="number" value="${r.price||''}" placeholder="0" min="0" step="any" style="flex:1;text-align:right" oninput="onF(${i},'price',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();onPriceEnter(this)}">
+          </div>
+        </td>`;
+    return `<tr>
+      <td><input class="cell-in cell-name-in" value="${esc(r.name)}" placeholder="항목명" oninput="rows[${i}].name=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();onNameEnter(${i})}"></td>
+      <td><select class="cell-sel" onchange="onF(${i},'cur',this.value)">${curOpts}</select></td>
+      ${priceCells}
+      <td><select class="cell-sel" onchange="onF(${i},'basis',this.value);render()">
+        <option value="CTN"${r.basis==='CTN'?' selected':''}>컨테이너</option>
+        <option value="BL"${r.basis==='BL'?' selected':''}>B/L</option>
+      </select></td>
+      <td class="sub-cell"><span class="c-${r.cur}">${CUR_SYM[r.cur]} ${fmt(sub,r.cur)}</span></td>
+      <td><input class="cell-in cell-memo" value="${esc(r.memo||'')}" placeholder="메모..." oninput="rows[${i}].memo=this.value"></td>
+      <td class="del-cell"><button class="del-btn" onclick="delRow(${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+  renderTotals();
+}
+
+/* ══════════════════════════════════════════
+   환율 + 합계
+══════════════════════════════════════════ */
+let fxRates={},fxLoaded=false,fxTime='';
+async function loadFxRates(){
+  const apis=[
+    async()=>{const r=await fetch('https://open.er-api.com/v6/latest/USD');const d=await r.json();if(d.result!=='success')throw new Error();return{rates:d.rates,date:d.time_last_update_utc};},
+    async()=>{const r=await fetch('https://api.frankfurter.app/latest?base=USD');const d=await r.json();return{rates:{...d.rates,USD:1},date:d.date};},
+  ];
+  for(const api of apis){
+    try{const{rates,date}=await api();fxRates={...rates,USD:1};fxLoaded=true;const d=new Date(date);fxTime=isNaN(d)?'최신':d.toLocaleDateString('ko-KR',{month:'long',day:'numeric'})+' 기준';renderTotals();return;}catch(e){continue;}
+  }
+  fxLoaded=false;fxTime='환율 로드 실패';renderTotals();
+}
+function convertTo(amount,fromCur,toCur){
+  if(fromCur===toCur)return amount;
+  if(!fxRates[fromCur]||!fxRates[toCur])return null;
+  return(amount/fxRates[fromCur])*fxRates[toCur];
+}
+function updateCurDropdown(active){
+  const sel=document.getElementById('cur-sel');const prev=sel.value;
+  sel.innerHTML='<option value="">— 통화 선택 —</option>'+CURRENCIES.map(c=>`<option value="${c}">${CUR_NAME[c]}</option>`).join('');
+  if(prev&&CURRENCIES.includes(prev))sel.value=prev;
+  else if(active.length)sel.value=active[0];
+}
+function renderTotals(){
+  const t=calcTotals();const active=CURRENCIES.filter(c=>t[c]>0);
+  const ctn=getTotalCtn()||1;
+  updateCurDropdown(active);
+  const body=document.getElementById('totals-body');
+  const toCur=document.getElementById('cur-sel').value;
+  if(!active.length||!toCur){body.innerHTML='<div class="empty-msg">항목을 입력하면 합계가 표시됩니다</div>';return}
+  const sym=CUR_SYM[toCur];
+  let total=0,canConvert=true;
+  for(const cur of active){
+    if(cur===toCur){total+=t[cur];continue;}
+    const c=convertTo(t[cur],cur,toCur);
+    if(c===null){canConvert=false;break;}
+    total+=c;
+  }
+  if(!fxLoaded||!canConvert){
+    const needConvert=active.filter(c=>c!==toCur);
+    const mi=needConvert.map(c=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="c-${c}" style="font-size:12px;font-weight:600;width:32px">${c}</span><span style="font-size:12px;color:var(--text3)">1 USD =</span><input type="number" id="fx-${c}" placeholder="환율" min="0" step="any" style="width:110px;height:28px;border:1px solid var(--border2);border-radius:var(--r-sm);padding:0 8px;font-family:'JetBrains Mono',monospace;font-size:13px;background:var(--surface2);color:var(--text);outline:none"><span style="font-size:11px;color:var(--text3)">${c}</span></div>`).join('');
+    body.innerHTML=`<div style="padding:2px 0"><div style="font-size:12px;color:#c0392b;margin-bottom:12px">⚠ 환율을 자동으로 불러오지 못했습니다.</div>${mi}<div style="display:flex;gap:8px;margin-top:8px"><button onclick="applyManualFx('${toCur}')" style="height:32px;padding:0 16px;border-radius:var(--r-sm);border:none;background:var(--text);color:#fff;font-family:'Noto Sans KR',sans-serif;font-size:12px;cursor:pointer">적용</button><button onclick="loadFxRates()" style="height:32px;padding:0 16px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-family:'Noto Sans KR',sans-serif;font-size:12px;cursor:pointer">재시도</button></div></div>`;
+    return;
+  }
+  const breakdown=active.map(cur=>{
+    if(cur===toCur)return`<span class="c-${cur}">${CUR_SYM[cur]} ${fmt(t[cur],cur)}</span>`;
+    const conv=convertTo(t[cur],cur,toCur);
+    return`<span class="c-${cur}">${CUR_SYM[cur]} ${fmt(t[cur],cur)}</span><span style="color:var(--text3);font-size:11px"> → ${sym} ${fmt(conv,toCur)}</span>`;
+  }).join('<br>');
+  const avg=total/ctn;
+  body.innerHTML=`<div class="totals-row">
+    <div class="tot-box">
+      <div class="tb-label">총합계 <span style="font-weight:400;color:var(--text3)">(${toCur} 환산)</span></div>
+      <div class="tb-val c-${toCur}">${sym} ${fmt(total,toCur)}</div>
+      <div class="tb-sub" style="line-height:1.6">${breakdown}</div>
+      <div class="tb-sub" style="margin-top:4px;color:var(--text3)">${fxTime}</div>
+    </div>
+    <div class="tot-box">
+      <div class="tb-label">컨테이너당 평균 <span style="font-weight:400;color:var(--text3)">(${toCur} 환산)</span></div>
+      <div class="tb-val c-${toCur}">${sym} ${fmt(avg,toCur)}</div>
+      <div class="tb-sub">총합 ÷ ${ctn}대 (20ft ${getC20()} + 40ft ${getC40()})</div>
+    </div>
+  </div>`;
+}
+function applyManualFx(toCur){
+  CURRENCIES.forEach(c=>{const el=document.getElementById('fx-'+c);if(el&&parseFloat(el.value)>0)fxRates[c]=parseFloat(el.value);});
+  fxRates['USD']=1;fxLoaded=true;fxTime='수동 입력 환율';renderTotals();
+}
+
+/* ══════════════════════════════════════════
+   TEMPLATES (Supabase)
+══════════════════════════════════════════ */
+let templates = {};
+
+async function loadTemplatesFromDB(){
+  try{
+    setSyncState('syncing','동기화 중...');
+    const data = await sbGet('templates','?order=name');
+    templates = {};
+    data.forEach(t=>{ templates[t.name]={rows:t.rows}; });
+    refreshTplSelect('');
+    setSyncState('ok','연결됨');
+  }catch(e){
+    setSyncState('err','동기화 실패');
+    showToast('템플릿 로드 실패: '+e.message);
+  }
+}
+
+function refreshTplSelect(sel){
+  const el=document.getElementById('tpl-sel');
+  const names=Object.keys(templates).sort();
+  el.innerHTML='<option value="">— 저장된 템플릿 —</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if(sel&&names.includes(sel))el.value=sel;
+}
+
+async function saveTemplate(){
+  const nameEl=document.getElementById('tpl-name');const name=nameEl.value.trim();
+  if(!name){nameEl.focus();showToast('템플릿 이름을 입력해 주세요');return;}
+  if(!rows.length){showToast('저장할 항목이 없습니다');return;}
+  if(templates[name]&&!confirm(`"${name}" 템플릿이 이미 있습니다. 덮어쓸까요?`))return;
+  try{
+    await sbUpsert('templates',{id:name,name,rows:JSON.parse(JSON.stringify(rows)),updated_at:new Date().toISOString()});
+    templates[name]={rows:JSON.parse(JSON.stringify(rows))};
+    refreshTplSelect(name);nameEl.value='';
+    showToast(`"${name}" 저장 완료`);
+  }catch(e){showToast('저장 실패: '+e.message);}
+}
+
+function loadTemplate(){
+  const name=document.getElementById('tpl-sel').value;
+  if(!name){showToast('불러올 템플릿을 선택해 주세요');return;}
+  const tpl=templates[name];if(!tpl)return;
+  rows=JSON.parse(JSON.stringify(tpl.rows));render();
+  showToast(`"${name}" 불러왔습니다`);
+}
+
+function closeTplEditModal(){ document.getElementById('tpl-edit-modal').classList.remove('show'); }
+
+function updateTemplate(){
+  const name=document.getElementById('tpl-sel').value;
+  if(!name){showToast('수정할 템플릿을 먼저 선택해 주세요');return;}
+  if(!rows.length){showToast('저장할 항목이 없습니다');return;}
+  // 모달 열고 현재 이름 미리 채우기
+  document.getElementById('tpl-edit-name-in').value=name;
+  document.getElementById('tpl-edit-modal').classList.add('show');
+  setTimeout(()=>{
+    const el=document.getElementById('tpl-edit-name-in');
+    el.focus();el.select();
+  },50);
+}
+
+async function confirmUpdateTemplate(){
+  const oldName=document.getElementById('tpl-sel').value;
+  const newName=document.getElementById('tpl-edit-name-in').value.trim();
+  if(!newName){document.getElementById('tpl-edit-name-in').focus();showToast('이름을 입력해 주세요');return;}
+  try{
+    // 이름이 바뀐 경우 기존 항목 삭제 후 새 이름으로 저장
+    if(oldName !== newName){
+      if(templates[newName]&&!confirm(`"${newName}" 템플릿이 이미 있습니다. 덮어쓸까요?`))return;
+      await sbDelete('templates', oldName);
+      delete templates[oldName];
+    }
+    await sbUpsert('templates',{id:newName,name:newName,rows:JSON.parse(JSON.stringify(rows)),updated_at:new Date().toISOString()});
+    templates[newName]={rows:JSON.parse(JSON.stringify(rows))};
+    closeTplEditModal();
+    refreshTplSelect(newName);
+    showToast(`"${newName}" 수정 완료`);
+  }catch(e){showToast('수정 실패: '+e.message);}
+}
+
+async function deleteTemplate(){
+  const el=document.getElementById('tpl-sel');const name=el.value;
+  if(!name){showToast('삭제할 템플릿을 선택해 주세요');return;}
+  if(!confirm(`"${name}" 템플릿을 삭제할까요?`))return;
+  try{
+    await sbDelete('templates',name);
+    delete templates[name];
+    refreshTplSelect('');
+    showToast(`"${name}" 삭제됨`);
+  }catch(e){showToast('삭제 실패: '+e.message);}
+}
+
+/* ══════════════════════════════════════════
+   ESTIMATES (Supabase)
+══════════════════════════════════════════ */
+function openSaveEstimate(){
+  editingEstId = null;
+  document.getElementById('est-modal-title').textContent = '견적 저장';
+  document.getElementById('est-title-in').value = '';
+  document.getElementById('est-note-in').value = '';
+  document.getElementById('est-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('est-title-in').focus(),50);
+}
+function closeEstModal(){ document.getElementById('est-modal').classList.remove('show'); }
+
+async function confirmSaveEstimate(){
+  const title=document.getElementById('est-title-in').value.trim();
+  if(!title){document.getElementById('est-title-in').focus();showToast('제목을 입력해 주세요');return;}
+  const note=document.getElementById('est-note-in').value.trim();
+  const payload={
+    title, note,
+    cnt20:getC20(), cnt40:getC40(), bl:getBl(),
+    rows:JSON.parse(JSON.stringify(rows)),
+    created_by:MY_NAME,
+    updated_at:new Date().toISOString()
+  };
+  try{
+    if(editingEstId){
+      await sbPatch('estimates',editingEstId,payload);
+      showToast('견적 수정 완료');
+    } else {
+      const r=await fetch(`${SB_URL}/rest/v1/estimates`,{
+        method:'POST',headers:{...sbHeaders(),'Prefer':'return=representation'},
+        body:JSON.stringify(payload)
+      });
+      if(!r.ok)throw new Error(await r.text());
+      showToast('견적 저장 완료');
+    }
+    closeEstModal();
+    await loadEstimates();
+  }catch(e){showToast('저장 실패: '+e.message);}
+}
+
+let cachedEstimates = [];
+
+async function loadEstimates(){
+  const listEl=document.getElementById('est-list');
+  listEl.innerHTML='<div class="empty-msg">불러오는 중...</div>';
+  // 검색어 초기화
+  const searchEl=document.getElementById('est-search');
+  if(searchEl) searchEl.value='';
+  try{
+    cachedEstimates=await sbGet('estimates','?order=updated_at.desc');
+    renderEstList(cachedEstimates);
+  }catch(e){listEl.innerHTML=`<div class="empty-msg" style="color:#c0392b">로드 실패: ${e.message}</div>`;}
+}
+
+function filterEstimates(){
+  const q=document.getElementById('est-search').value.trim().toLowerCase();
+  if(!q){ renderEstList(cachedEstimates); return; }
+  const filtered=cachedEstimates.filter(e=>
+    (e.title||'').toLowerCase().includes(q) ||
+    (e.note||'').toLowerCase().includes(q)
+  );
+  renderEstList(filtered, q);
+}
+
+function highlight(text, q){
+  if(!q||!text) return esc(text||'');
+  const re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
+  return esc(text).replace(re,'<mark style="background:#fff3b0;border-radius:2px">$1</mark>');
+}
+
+function renderEstList(data, q=''){
+  const listEl=document.getElementById('est-list');
+  if(!data.length){
+    listEl.innerHTML=`<div class="empty-msg">${q?'검색 결과가 없습니다':'저장된 견적이 없습니다'}</div>`;
+    return;
+  }
+  listEl.innerHTML='<div class="estimate-list">'+data.map(e=>{
+    const d=new Date(e.updated_at).toLocaleString('ko-KR',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const ctnInfo=`20ft ${e.cnt20}대 + 40ft ${e.cnt40}대, B/L ${e.bl}개`;
+    return `<div class="est-item">
+      <div class="est-item-top">
+        <div class="est-title">${highlight(e.title,q)}</div>
+        <div class="est-actions">
+          <button class="act-btn" onclick="compareEstimate('${e.id}','${esc(e.title)}')">⚖️ 비교</button>
+          <button class="act-btn" onclick="loadEstimate('${e.id}')">불러오기</button>
+          <button class="act-btn" onclick="editEstimate('${e.id}')">수정</button>
+          <button class="act-btn danger" onclick="deleteEstimate('${e.id}')">삭제</button>
+        </div>
+      </div>
+      <div class="est-meta">${d} · ${esc(e.created_by||'익명')} · ${ctnInfo}${e.note?` · ${highlight(e.note,q)}`:''}</div>
+    </div>`;
+  }).join('')+'</div>';
+}
+
+/* ══════════════════════════════════════════
+   요약 비교 탭 → 편집 가능한 나란히 비교
+══════════════════════════════════════════ */
+let cmpRows = {
+  L: [{name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}],
+  R: [{name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}]
+};
+
+function cGetC20(s){ return Math.max(0,parseInt(document.getElementById('c'+s+'-20').value)||0); }
+function cGetC40(s){ return Math.max(0,parseInt(document.getElementById('c'+s+'-40').value)||0); }
+function cGetBl(s){  return Math.max(1,parseInt(document.getElementById('c'+s+'-bl').value)||1); }
+function cGetCtn(s){ return cGetC20(s)+cGetC40(s); }
+function cRowSub(r,s){
+  if(r.basis==='BL') return r.price*cGetBl(s);
+  return r.p20*cGetC20(s)+r.p40*cGetC40(s);
+}
+function cCalcTotals(s){
+  const t={};CURRENCIES.forEach(c=>t[c]=0);
+  cmpRows[s].forEach(r=>{t[r.cur]=(t[r.cur]||0)+cRowSub(r,s)});
+  return t;
+}
+function cadj(s,type,delta){
+  const ids={c20:'c'+s+'-20',c40:'c'+s+'-40',bl:'c'+s+'-bl'};
+  const el=document.getElementById(ids[type]);
+  const min=type==='bl'?1:0;
+  el.value=Math.max(min,Math.min(99,(parseInt(el.value)||0)+delta));
+  renderCmp(s);
+}
+function addCmpRow(s){
+  cmpRows[s].push({name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0});
+  renderCmp(s);
+  setTimeout(()=>{const els=document.querySelectorAll('#c'+s+'-rows .s-name-in');if(els.length)els[els.length-1].focus();},30);
+}
+function delCmpRow(s,i){ cmpRows[s].splice(i,1); renderCmp(s); }
+function onCF(s,i,f,v){
+  cmpRows[s][i][f]=['p20','p40','price'].includes(f)?(parseFloat(v)||0):v;
+  renderCmpTotals(s); renderCmpDiff();
+}
+function refreshCmpTplSelects(){
+  ['L','R'].forEach(s=>{
+    const el=document.getElementById('c'+s+'-tpl');
+    const names=Object.keys(templates).sort();
+    el.innerHTML='<option value="">— 템플릿 —</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  });
+}
+function loadCmpTpl(s){
+  const name=document.getElementById('c'+s+'-tpl').value;
+  if(!name) return;
+  const tpl=templates[name]; if(!tpl) return;
+  cmpRows[s]=JSON.parse(JSON.stringify(tpl.rows));
+  renderCmp(s); showToast(`"${name}" 불러왔습니다`);
+}
+
+function renderCmp(s){
+  const tbody=document.getElementById('c'+s+'-rows');
+  if(!cmpRows[s].length){
+    tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3);font-size:12px">항목을 추가하세요</td></tr>`;
+    renderCmpTotals(s); return;
+  }
+  tbody.innerHTML=cmpRows[s].map((r,i)=>{
+    const sub=cRowSub(r,s);
+    const curOpts=CURRENCIES.map(c=>`<option value="${c}"${c===r.cur?' selected':''}>${c}</option>`).join('');
+    const isCTN=r.basis==='CTN';
+    const priceCells=isCTN
+      ?`<td style="padding:0"><input class="half-in" type="number" value="${r.p20||''}" placeholder="—" min="0" step="any" style="height:36px;font-size:12px" oninput="onCF('${s}',${i},'p20',this.value)"></td>
+        <td style="padding:0"><input class="half-in" type="number" value="${r.p40||''}" placeholder="—" min="0" step="any" style="height:36px;font-size:12px" oninput="onCF('${s}',${i},'p40',this.value)"></td>`
+      :`<td colspan="2" style="padding:0 8px;vertical-align:middle">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-size:9px;color:var(--text3);white-space:nowrap">B/L 단가</span>
+            <input class="half-in" type="number" value="${r.price||''}" placeholder="0" min="0" step="any" style="flex:1;height:36px;font-size:12px;text-align:right" oninput="onCF('${s}',${i},'price',this.value)">
+          </div>
+        </td>`;
+    return `<tr>
+      <td><input class="cell-in s-name-in" value="${esc(r.name)}" placeholder="항목명" style="height:36px;font-size:12px" oninput="cmpRows['${s}'][${i}].name=this.value"></td>
+      <td><select class="cell-sel" style="height:36px;font-size:12px" onchange="onCF('${s}',${i},'cur',this.value)">${curOpts}</select></td>
+      ${priceCells}
+      <td><select class="cell-sel" style="height:36px;font-size:12px" onchange="onCF('${s}',${i},'basis',this.value);renderCmp('${s}')">
+        <option value="CTN"${r.basis==='CTN'?' selected':''}>컨테이너</option>
+        <option value="BL"${r.basis==='BL'?' selected':''}>B/L</option>
+      </select></td>
+      <td class="sub-cell" style="font-size:12px"><span class="c-${r.cur}">${CUR_SYM[r.cur]} ${fmt(sub,r.cur)}</span></td>
+      <td class="del-cell"><button class="del-btn" onclick="delCmpRow('${s}',${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+  renderCmpTotals(s); renderCmpDiff();
+}
+
+function updateCmpCurDropdown(s, active){
+  const sel=document.getElementById('c'+s+'-cur');
+  const prev=sel.value;
+  sel.innerHTML='<option value="">— 통화 —</option>'+CURRENCIES.map(c=>`<option value="${c}">${CUR_NAME[c]}</option>`).join('');
+  if(prev&&CURRENCIES.includes(prev)) sel.value=prev;
+  else if(active.length) sel.value=active[0];
+}
+
+function renderCmpTotals(s){
+  const t=cCalcTotals(s);
+  const active=CURRENCIES.filter(c=>t[c]>0);
+  const ctn=cGetCtn(s)||1;
+  updateCmpCurDropdown(s,active);
+  const body=document.getElementById('c'+s+'-tot');
+  const toCur=document.getElementById('c'+s+'-cur').value;
+  if(!active.length||!toCur){body.innerHTML='<div class="empty-msg">항목을 추가하세요</div>';return;}
+  const sym=CUR_SYM[toCur];
+  let total=0,canConvert=true;
+  for(const cur of active){
+    if(cur===toCur){total+=t[cur];continue;}
+    const c=convertTo(t[cur],cur,toCur);
+    if(c===null){canConvert=false;break;}
+    total+=c;
+  }
+  if(!canConvert||!fxLoaded){
+    if(active.length===1){
+      const cur=active[0];
+      body.innerHTML=`<div class="totals-row">
+        <div class="tot-box"><div class="tb-label">총합계</div><div class="tb-val c-${cur}">${CUR_SYM[cur]} ${fmt(t[cur],cur)}</div></div>
+        <div class="tot-box"><div class="tb-label">컨테이너당 평균</div><div class="tb-val c-${cur}">${CUR_SYM[cur]} ${fmt(t[cur]/ctn,cur)}</div></div>
+      </div>`;
+    } else { body.innerHTML='<div class="empty-msg" style="color:#c0392b">환율 로드 필요</div>'; }
+    return;
+  }
+  const avg=total/ctn;
+  const breakdown=active.map(cur=>{
+    if(cur===toCur) return `<span class="c-${cur}">${CUR_SYM[cur]} ${fmt(t[cur],cur)}</span>`;
+    const conv=convertTo(t[cur],cur,toCur);
+    return `<span class="c-${cur}">${CUR_SYM[cur]} ${fmt(t[cur],cur)}</span><span style="color:var(--text3);font-size:10px"> → ${sym} ${fmt(conv,toCur)}</span>`;
+  }).join('<br>');
+  body.innerHTML=`<div class="totals-row">
+    <div class="tot-box">
+      <div class="tb-label">총합계 (${toCur})</div>
+      <div class="tb-val c-${toCur}">${sym} ${fmt(total,toCur)}</div>
+      <div class="tb-sub" style="line-height:1.6">${breakdown}</div>
+    </div>
+    <div class="tot-box">
+      <div class="tb-label">컨테이너당 평균</div>
+      <div class="tb-val c-${toCur}">${sym} ${fmt(avg,toCur)}</div>
+      <div class="tb-sub">총합 ÷ ${ctn}대</div>
+    </div>
+  </div>`;
+  renderCmpDiff();
+}
+
+function renderCmpDiff(){
+  const diffEl=document.getElementById('cmp-diff');
+  if(!fxLoaded){diffEl.style.display='none';return;}
+  function toUSD(s){
+    const t=cCalcTotals(s);let usd=0;
+    CURRENCIES.forEach(c=>{if(!t[c])return;const r=convertTo(t[c],c,'USD');if(r!==null)usd+=r;});
+    return usd;
+  }
+  const lUSD=toUSD('L'),rUSD=toUSD('R');
+  if(!lUSD&&!rUSD){diffEl.style.display='none';return;}
+  const diff=lUSD-rUSD;
+  const pct=rUSD?((diff/rUSD)*100).toFixed(1):'—';
+  const badge=diff>0
+    ?`<span class="diff-badge diff-up">왼쪽이 $${fmt(Math.abs(diff),'USD')} 더 비쌈 (+${pct}%)</span>`
+    :diff<0
+    ?`<span class="diff-badge diff-dn">왼쪽이 $${fmt(Math.abs(diff),'USD')} 더 저렴 (${pct}%)</span>`
+    :`<span class="diff-badge" style="background:var(--surface2);color:var(--text2)">동일</span>`;
+  diffEl.style.display='block';
+  diffEl.innerHTML=`<b>차이 요약 (USD 환산)</b> &nbsp; 왼쪽 <b>$${fmt(lUSD,'USD')}</b> vs 오른쪽 <b>$${fmt(rUSD,'USD')}</b> &nbsp; ${badge} <span style="font-size:11px;color:var(--text3);margin-left:6px">${fxTime}</span>`;
+}
+
+function closeCompareTab(){
+  const isActive=document.getElementById('tab-compare').classList.contains('active');
+  if(isActive){
+    document.getElementById('tab-compare').style.display='none';
+    switchTab('history');
+  } else {
+    switchTab('compare');
+  }
+}
+
+async function compareEstimate(id, title){
+  try{
+    const data=await sbGet('estimates',`?id=eq.${id}`);
+    if(!data.length) return;
+    const e=data[0];
+    // 오른쪽에 저장된 견적 로드
+    cmpRows.R=JSON.parse(JSON.stringify(e.rows));
+    document.getElementById('cR-20').value=e.cnt20||0;
+    document.getElementById('cR-40').value=e.cnt40||0;
+    document.getElementById('cR-bl').value=e.bl||1;
+    document.getElementById('cmp-right-label').textContent=title;
+    // 왼쪽에 현재 견적 로드
+    cmpRows.L=JSON.parse(JSON.stringify(rows));
+    document.getElementById('cL-20').value=getC20();
+    document.getElementById('cL-40').value=getC40();
+    document.getElementById('cL-bl').value=getBl();
+    // 탭 표시
+    const tabBtn=document.getElementById('tab-compare');
+    tabBtn.style.display='inline-block';
+    document.getElementById('compare-title-label').textContent=title;
+    switchTab('compare');
+    renderCmp('L'); renderCmp('R');
+  }catch(e){ showToast('비교 불러오기 실패: '+e.message); }
+}
+
+function renderCompare(){
+  refreshCmpTplSelects();
+  renderCmp('L'); renderCmp('R');
+}
+
+function loadEstimate(id){
+  sbGet('estimates',`?id=eq.${id}`).then(data=>{
+    if(!data.length)return;
+    const e=data[0];
+    rows=JSON.parse(JSON.stringify(e.rows));
+    document.getElementById('cnt-20').value=e.cnt20||0;
+    document.getElementById('cnt-40').value=e.cnt40||0;
+    document.getElementById('bl-cnt').value=e.bl||1;
+    editingEstId=id;
+    switchTab('calc');
+    render();
+    showToast(`"${e.title}" 불러왔습니다`);
+  }).catch(err=>showToast('불러오기 실패: '+err.message));
+}
+
+async function editEstimate(id){
+  const data=await sbGet('estimates',`?id=eq.${id}`);
+  if(!data.length)return;
+  const e=data[0];
+  editingEstId=id;
+  document.getElementById('est-modal-title').textContent='견적 수정';
+  document.getElementById('est-title-in').value=e.title;
+  document.getElementById('est-note-in').value=e.note||'';
+  document.getElementById('est-modal').classList.add('show');
+}
+
+async function deleteEstimate(id){
+  if(!confirm('이 견적을 삭제할까요?'))return;
+  try{
+    await sbDelete('estimates',id);
+    showToast('삭제됨');
+    loadEstimates();
+  }catch(e){showToast('삭제 실패: '+e.message);}
+}
+
+/* ══════════════════════════════════════════
+   INIT
+══════════════════════════════════════════ */
+async function init(){
+  const cfg=loadCfg();
+  if(cfg.url&&cfg.key){
+    SB_URL=cfg.url; SB_KEY=cfg.key; MY_NAME=cfg.name||'익명';
+    document.getElementById('setup-overlay').style.display='none';
+    setSyncState('syncing','연결 중...');
+    try{
+      await sbGet('templates','?limit=1');
+      setSyncState('ok','연결됨');
+      await loadTemplatesFromDB();
+    }catch(e){
+      setSyncState('err','연결 실패');
+      document.getElementById('setup-overlay').style.display='flex';
+    }
+  }
+  render();
+  loadFxRates();
+}
+
+init();
+</script>
+</body>
+</html>
