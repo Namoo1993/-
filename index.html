@@ -634,8 +634,8 @@ const CUR_DEC={KRW:0,JPY:0,USD:2,CNY:2,THB:2,VND:0};
 
 let SB_URL='', SB_KEY='', MY_NAME='익명';
 let rows=[
-  {name:'THC',cur:'KRW',p20:150000,q20:0,p40:180000,q40:0,basis:'CTN',price:0,memo:''},
-  {name:'DOL (Document)',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'BL',price:50000,memo:''},
+  {name:'THC',cur:'USD',p20:150,q20:0,p40:180,q40:0,basis:'CTN',price:0,memo:''},
+  {name:'DOL (Document)',cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'BL',price:50,memo:''},
   {name:'O/F',cur:'USD',p20:700,q20:0,p40:850,q40:0,basis:'CTN',price:0,memo:''},
 ];
 let editingEstId = null;
@@ -865,7 +865,7 @@ function updateSideCurDropdown(s, active){
   const prev=sel.value;
   sel.innerHTML='<option value="">— 통화 —</option>'+CURRENCIES.map(c=>`<option value="${c}">${CUR_NAME[c]}</option>`).join('');
   if(prev&&CURRENCIES.includes(prev)) sel.value=prev;
-  else if(active.length) sel.value=active[0];
+  else sel.value='USD';
 }
 
 function renderSideTotals(s){
@@ -1040,7 +1040,7 @@ function updateCurDropdown(active){
   const sel=document.getElementById('cur-sel');const prev=sel.value;
   sel.innerHTML='<option value="">— 통화 선택 —</option>'+CURRENCIES.map(c=>`<option value="${c}">${CUR_NAME[c]}</option>`).join('');
   if(prev&&CURRENCIES.includes(prev))sel.value=prev;
-  else if(active.length)sel.value=active[0];
+  else sel.value='USD';
 }
 function renderTotals(){
   const t=calcTotals();const active=CURRENCIES.filter(c=>t[c]>0);
@@ -1373,7 +1373,7 @@ function updateCmpCurDropdown(s, active){
   const prev=sel.value;
   sel.innerHTML='<option value="">— 통화 —</option>'+CURRENCIES.map(c=>`<option value="${c}">${CUR_NAME[c]}</option>`).join('');
   if(prev&&CURRENCIES.includes(prev)) sel.value=prev;
-  else if(active.length) sel.value=active[0];
+  else sel.value='USD';
 }
 
 function renderCmpTotals(s){
