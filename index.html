@@ -277,7 +277,8 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
     </div>
     <div class="modal-btns">
       <button class="modal-btn" onclick="closeEstModal()">취소</button>
-      <button class="modal-btn ok" onclick="confirmSaveEstimate()">저장</button>
+      <button class="modal-btn" id="est-saveas-btn" style="display:none" onclick="confirmSaveEstimate(true)">새 견적으로 저장</button>
+      <button class="modal-btn ok" id="est-ok-btn" onclick="confirmSaveEstimate()">저장</button>
     </div>
   </div>
 </div>
@@ -329,7 +330,7 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
       <span class="tb-label" style="color:var(--ft40)">40ft</span>
       <div class="cnt-wrap">
         <button class="cnt-btn" onclick="adj('c40',-1)">−</button>
-        <input class="cnt-in" type="number" id="cnt-40" value="1" min="0" max="99" oninput="render()">
+        <input class="cnt-in" type="number" id="cnt-40" value="0" min="0" max="99" oninput="render()">
         <button class="cnt-btn" onclick="adj('c40',1)">+</button>
       </div>
       <div class="sep"></div>
@@ -623,6 +624,9 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
    CONFIG & STATE
 ══════════════════════════════════════════ */
 const CFG_KEY = 'freight_supabase_cfg';
+/* 팀 공용 기본 연결값 — 브라우저 데이터가 지워져도 자동 연결됨 */
+const DEFAULT_SB_URL = 'https://mctumkkonhvkojkfnszz.supabase.co';
+const DEFAULT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jdHVta2tvbmh2a29qa2Zuc3p6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0MDg4MTAsImV4cCI6MjA5Nzk4NDgxMH0.Q-Z_KM4eYjvSd_Qt_-t6Tevye11fHWIq344mrWNTSZY';
 const CURRENCIES=['KRW','JPY','USD','CNY','THB','VND'];
 const CUR_SYM={KRW:'₩',JPY:'¥',USD:'$',CNY:'¥',THB:'฿',VND:'₫'};
 const CUR_NAME={KRW:'원화 KRW',JPY:'엔화 JPY',USD:'달러 USD',CNY:'인민폐 CNY',THB:'바트 THB',VND:'동 VND'};
@@ -635,6 +639,7 @@ let rows=[
   {name:'O/F',cur:'USD',p20:700,q20:0,p40:850,q40:0,basis:'CTN',price:0,memo:''},
 ];
 let editingEstId = null;
+let editingEstMeta = {title:'',note:''};
 
 /* ══════════════════════════════════════════
    SUPABASE HELPERS
@@ -672,8 +677,8 @@ async function sbDelete(table, id){
 ══════════════════════════════════════════ */
 function openSetup(){
   const cfg = loadCfg();
-  document.getElementById('setup-url').value = cfg.url||'';
-  document.getElementById('setup-key').value = cfg.key||'';
+  document.getElementById('setup-url').value = cfg.url||DEFAULT_SB_URL;
+  document.getElementById('setup-key').value = cfg.key||DEFAULT_SB_KEY;
   document.getElementById('setup-name').value = cfg.name||'';
   document.getElementById('setup-overlay').style.display='flex';
 }
@@ -755,8 +760,8 @@ function switchTab(tab){
    나란히 비교 (SIDE BY SIDE)
 ══════════════════════════════════════════ */
 let sideRows = {
-  L: [{name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}],
-  R: [{name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}]
+  L: [{name:'',cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}],
+  R: [{name:'',cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}]
 };
 
 function sGetC20(s){ return Math.max(0,parseInt(document.getElementById('s'+s+'-20').value)||0); }
@@ -782,7 +787,7 @@ function sadj(s,type,delta){
 }
 
 function addSideRow(s){
-  sideRows[s].push({name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0});
+  sideRows[s].push({name:'',cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0});
   renderSide(s);
   setTimeout(()=>{
     const els=document.querySelectorAll('#s'+s+'-rows .s-name-in');
@@ -797,7 +802,7 @@ function onSF(s,i,f,v){
 }
 
 function clearSide(s){
-  sideRows[s]=[{name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}];
+  sideRows[s]=[{name:'',cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}];
   renderSide(s);
 }
 
@@ -938,12 +943,12 @@ function renderSideDiff(){
    ROW EDITING
 ══════════════════════════════════════════ */
 function addRow(){
-  rows.push({name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:''});
+  rows.push({name:'',cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:''});
   render();
   setTimeout(()=>{const els=document.querySelectorAll('.cell-name-in');if(els.length)els[els.length-1].focus();},30);
 }
 function delRow(i){rows.splice(i,1);render()}
-function clearRows(){if(!confirm('현재 견적을 모두 지울까요?'))return;rows=[];editingEstId=null;render();}
+function clearRows(){if(!confirm('현재 견적을 모두 지울까요?'))return;rows=[];editingEstId=null;editingEstMeta={title:'',note:''};updateEditBanner();render();}
 function onF(i,f,v){
   rows[i][f]=['p20','q20','p40','q40','price'].includes(f)?(parseFloat(v)||0):v;
   renderTotals();
@@ -1180,16 +1185,18 @@ async function deleteTemplate(){
    ESTIMATES (Supabase)
 ══════════════════════════════════════════ */
 function openSaveEstimate(){
-  editingEstId = null;
-  document.getElementById('est-modal-title').textContent = '견적 저장';
-  document.getElementById('est-title-in').value = '';
-  document.getElementById('est-note-in').value = '';
+  const editing = !!editingEstId;
+  document.getElementById('est-modal-title').textContent = editing ? '견적 수정' : '견적 저장';
+  document.getElementById('est-title-in').value = editing ? editingEstMeta.title : '';
+  document.getElementById('est-note-in').value  = editing ? editingEstMeta.note  : '';
+  document.getElementById('est-saveas-btn').style.display = editing ? 'inline-block' : 'none';
+  document.getElementById('est-ok-btn').textContent = editing ? '수정 저장' : '저장';
   document.getElementById('est-modal').classList.add('show');
   setTimeout(()=>document.getElementById('est-title-in').focus(),50);
 }
 function closeEstModal(){ document.getElementById('est-modal').classList.remove('show'); }
 
-async function confirmSaveEstimate(){
+async function confirmSaveEstimate(asNew=false){
   const title=document.getElementById('est-title-in').value.trim();
   if(!title){document.getElementById('est-title-in').focus();showToast('제목을 입력해 주세요');return;}
   const note=document.getElementById('est-note-in').value.trim();
@@ -1201,8 +1208,10 @@ async function confirmSaveEstimate(){
     updated_at:new Date().toISOString()
   };
   try{
-    if(editingEstId){
+    if(editingEstId && !asNew){
       await sbPatch('estimates',editingEstId,payload);
+      editingEstMeta={title,note};
+      updateEditBanner();
       showToast('견적 수정 완료');
     } else {
       const r=await fetch(`${SB_URL}/rest/v1/estimates`,{
@@ -1210,7 +1219,8 @@ async function confirmSaveEstimate(){
         body:JSON.stringify(payload)
       });
       if(!r.ok)throw new Error(await r.text());
-      showToast('견적 저장 완료');
+      editingEstId=null; editingEstMeta={title:'',note:''}; updateEditBanner();
+      showToast(asNew?'새 견적으로 저장 완료':'견적 저장 완료');
     }
     closeEstModal();
     await loadEstimates();
@@ -1275,8 +1285,8 @@ function renderEstList(data, q=''){
    요약 비교 탭 → 편집 가능한 나란히 비교
 ══════════════════════════════════════════ */
 let cmpRows = {
-  L: [{name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}],
-  R: [{name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}]
+  L: [{name:'',cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}],
+  R: [{name:'',cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0}]
 };
 
 function cGetC20(s){ return Math.max(0,parseInt(document.getElementById('c'+s+'-20').value)||0); }
@@ -1300,7 +1310,7 @@ function cadj(s,type,delta){
   renderCmp(s);
 }
 function addCmpRow(s){
-  cmpRows[s].push({name:'',cur:'KRW',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0});
+  cmpRows[s].push({name:'',cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0});
   renderCmp(s);
   setTimeout(()=>{const els=document.querySelectorAll('#c'+s+'-rows .s-name-in');if(els.length)els[els.length-1].focus();},30);
 }
@@ -1483,21 +1493,51 @@ function loadEstimate(id){
     document.getElementById('cnt-40').value=e.cnt40||0;
     document.getElementById('bl-cnt').value=e.bl||1;
     editingEstId=id;
+    editingEstMeta={title:e.title||'',note:e.note||''};
     switchTab('calc');
     render();
+    updateEditBanner();
     showToast(`"${e.title}" 불러왔습니다`);
   }).catch(err=>showToast('불러오기 실패: '+err.message));
 }
 
 async function editEstimate(id){
-  const data=await sbGet('estimates',`?id=eq.${id}`);
-  if(!data.length)return;
-  const e=data[0];
-  editingEstId=id;
-  document.getElementById('est-modal-title').textContent='견적 수정';
-  document.getElementById('est-title-in').value=e.title;
-  document.getElementById('est-note-in').value=e.note||'';
-  document.getElementById('est-modal').classList.add('show');
+  try{
+    const data=await sbGet('estimates',`?id=eq.${id}`);
+    if(!data.length)return;
+    const e=data[0];
+    rows=JSON.parse(JSON.stringify(e.rows));
+    document.getElementById('cnt-20').value=e.cnt20||0;
+    document.getElementById('cnt-40').value=e.cnt40||0;
+    document.getElementById('bl-cnt').value=e.bl||1;
+    editingEstId=id;
+    editingEstMeta={title:e.title||'',note:e.note||''};
+    switchTab('calc');
+    render();
+    updateEditBanner();
+    showToast(`"${e.title}" 수정 모드 — 내용을 고친 뒤 저장 버튼을 누르세요`);
+  }catch(err){showToast('불러오기 실패: '+err.message);}
+}
+
+function updateEditBanner(){
+  let b=document.getElementById('edit-banner');
+  if(!editingEstId){ if(b)b.remove(); return; }
+  if(!b){
+    b=document.createElement('div');
+    b.id='edit-banner';
+    b.style.cssText='margin:0 0 14px;padding:10px 14px;border:1px solid #d9b44a;background:#fdf6e0;border-radius:8px;font-size:12.5px;display:flex;align-items:center;gap:10px';
+    const pane=document.getElementById('pane-calc');
+    pane.insertBefore(b,pane.firstChild);
+  }
+  b.innerHTML=`✏️ <b>"${esc(editingEstMeta.title)}"</b> 수정 중 — 저장 시 이 견적이 갱신됩니다.
+    <button onclick="exitEditMode()" style="margin-left:auto;height:26px;padding:0 10px;border:1px solid var(--border2);border-radius:4px;background:#fff;font-size:11px;cursor:pointer;font-family:'Noto Sans KR',sans-serif">수정 취소 (새 견적으로)</button>`;
+}
+
+function exitEditMode(){
+  editingEstId=null;
+  editingEstMeta={title:'',note:''};
+  updateEditBanner();
+  showToast('수정 모드를 해제했습니다. 이제 저장하면 새 견적으로 저장됩니다.');
 }
 
 async function deleteEstimate(id){
@@ -1514,18 +1554,24 @@ async function deleteEstimate(id){
 ══════════════════════════════════════════ */
 async function init(){
   const cfg=loadCfg();
-  if(cfg.url&&cfg.key){
-    SB_URL=cfg.url; SB_KEY=cfg.key; MY_NAME=cfg.name||'익명';
-    document.getElementById('setup-overlay').style.display='none';
-    setSyncState('syncing','연결 중...');
-    try{
-      await sbGet('templates','?limit=1');
-      setSyncState('ok','연결됨');
-      await loadTemplatesFromDB();
-    }catch(e){
-      setSyncState('err','연결 실패');
-      document.getElementById('setup-overlay').style.display='flex';
+  /* 저장된 설정이 있으면 그걸 쓰고, 없으면 기본 연결값으로 자동 연결 */
+  SB_URL=cfg.url||DEFAULT_SB_URL;
+  SB_KEY=cfg.key||DEFAULT_SB_KEY;
+  MY_NAME=cfg.name||'익명';
+  document.getElementById('setup-overlay').style.display='none';
+  setSyncState('syncing','연결 중...');
+  try{
+    await sbGet('templates','?limit=1');
+    setSyncState('ok','연결됨');
+    saveCfg({url:SB_URL,key:SB_KEY,name:MY_NAME});
+    await loadTemplatesFromDB();
+    if(!cfg.name){
+      const n=(prompt('견적 작성자로 표시할 이름을 입력하세요 (예: 홍길동)')||'').trim();
+      if(n){MY_NAME=n;saveCfg({url:SB_URL,key:SB_KEY,name:n});showToast(n+'님, 연결되었습니다!');}
     }
+  }catch(e){
+    setSyncState('err','연결 실패');
+    document.getElementById('setup-overlay').style.display='flex';
   }
   render();
   loadFxRates();
