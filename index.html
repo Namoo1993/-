@@ -96,6 +96,14 @@ body.side-mode .tab-bar{margin-left:-24px;margin-right:-24px;padding-left:24px;p
 @media(max-width:900px){.compare-wrap{grid-template-columns:1fr}}
 .estimate-list{display:grid;gap:8px}
 .est-item{border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;cursor:pointer;transition:all .12s;background:var(--surface)}
+/* ── 폴더 ── */
+.folder-chip{height:28px;padding:0 12px;border:1px solid var(--border2);border-radius:14px;background:var(--surface);font-family:'Noto Sans KR',sans-serif;font-size:12px;color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .12s}
+.folder-chip:hover{border-color:var(--text3)}
+.folder-chip.on{background:var(--text);color:#fff;border-color:var(--text)}
+.folder-chip .fc-cnt{font-size:10.5px;opacity:.7}
+.folder-mng{height:26px;padding:0 8px;border:1px solid var(--border2);border-radius:6px;background:var(--surface);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;color:var(--text2)}
+.folder-mng:hover{border-color:var(--text3)}
+.est-folder-sel{height:24px;border:1px solid var(--border2);border-radius:4px;background:var(--surface);font-family:'Noto Sans KR',sans-serif;font-size:11px;color:var(--text2);outline:none;max-width:140px;cursor:pointer}
 .est-item:hover{border-color:var(--border2);background:var(--surface2)}
 .est-item.active{border-color:#888;background:var(--surface2)}
 .est-item-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
@@ -274,6 +282,10 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
     <div class="modal-field">
       <label>메모 (선택)</label>
       <textarea id="est-note-in" placeholder="참고 사항 입력..."></textarea>
+    </div>
+    <div class="modal-field" id="est-folder-field" style="display:none">
+      <label>폴더 (선택)</label>
+      <select id="est-folder-in" style="width:100%;height:36px;border:1px solid var(--border2);border-radius:var(--r-sm);background:var(--surface);font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);outline:none;padding:0 8px"></select>
     </div>
     <div class="modal-btns">
       <button class="modal-btn" onclick="closeEstModal()">취소</button>
@@ -524,6 +536,7 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
         </span>
       </div>
       <div class="card-body">
+        <div id="folder-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center"></div>
         <div id="est-list"><div class="empty-msg">저장된 견적이 없습니다</div></div>
       </div>
     </div>
@@ -1184,7 +1197,7 @@ async function deleteTemplate(){
 /* ══════════════════════════════════════════
    ESTIMATES (Supabase)
 ══════════════════════════════════════════ */
-function openSaveEstimate(){
+async function openSaveEstimate(){
   const editing = !!editingEstId;
   document.getElementById('est-modal-title').textContent = editing ? '견적 수정' : '견적 저장';
   document.getElementById('est-title-in').value = editing ? editingEstMeta.title : '';
@@ -1192,6 +1205,16 @@ function openSaveEstimate(){
   document.getElementById('est-saveas-btn').style.display = editing ? 'inline-block' : 'none';
   document.getElementById('est-ok-btn').textContent = editing ? '수정 저장' : '저장';
   document.getElementById('est-modal').classList.add('show');
+  /* 폴더 목록 준비 (folders 테이블이 없으면 폴더 항목 숨김) */
+  try{ folders=await sbGet('folders','?order=name.asc'); foldersReady=true; }catch(e){ foldersReady=false; }
+  const fld=document.getElementById('est-folder-field');
+  const sel=document.getElementById('est-folder-in');
+  if(foldersReady){
+    fld.style.display='block';
+    sel.innerHTML='<option value="">📂 미분류</option>'+folders.map(f=>`<option value="${esc(f.name)}">📁 ${esc(f.name)}</option>`).join('');
+    sel.value = editing ? (editingEstMeta.folder||'')
+              : (curFolder!=='__all__'&&curFolder!=='__none__' ? curFolder : '');
+  } else fld.style.display='none';
   setTimeout(()=>document.getElementById('est-title-in').focus(),50);
 }
 function closeEstModal(){ document.getElementById('est-modal').classList.remove('show'); }
@@ -1200,6 +1223,7 @@ async function confirmSaveEstimate(asNew=false){
   const title=document.getElementById('est-title-in').value.trim();
   if(!title){document.getElementById('est-title-in').focus();showToast('제목을 입력해 주세요');return;}
   const note=document.getElementById('est-note-in').value.trim();
+  const folderVal=foldersReady?(document.getElementById('est-folder-in').value||null):undefined;
   const payload={
     title, note,
     cnt20:getC20(), cnt40:getC40(), bl:getBl(),
@@ -1207,10 +1231,11 @@ async function confirmSaveEstimate(asNew=false){
     created_by:MY_NAME,
     updated_at:new Date().toISOString()
   };
+  if(folderVal!==undefined) payload.folder=folderVal;
   try{
     if(editingEstId && !asNew){
       await sbPatch('estimates',editingEstId,payload);
-      editingEstMeta={title,note};
+      editingEstMeta={title,note,folder:folderVal||''};
       updateEditBanner();
       showToast('견적 수정 완료');
     } else {
@@ -1229,6 +1254,15 @@ async function confirmSaveEstimate(asNew=false){
 
 let cachedEstimates = [];
 
+let folders=[];          // {id,name} 목록
+let foldersReady=false;  // folders 테이블 존재 여부
+let curFolder='__all__'; // '__all__' | '__none__' | 폴더명
+
+async function sbPatchWhere(table, query, data){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}${query}`,{method:'PATCH',headers:sbHeaders(),body:JSON.stringify(data)});
+  if(!r.ok)throw new Error(await r.text());
+}
+
 async function loadEstimates(){
   const listEl=document.getElementById('est-list');
   listEl.innerHTML='<div class="empty-msg">불러오는 중...</div>';
@@ -1237,14 +1271,108 @@ async function loadEstimates(){
   if(searchEl) searchEl.value='';
   try{
     cachedEstimates=await sbGet('estimates','?order=updated_at.desc');
-    renderEstList(cachedEstimates);
-  }catch(e){listEl.innerHTML=`<div class="empty-msg" style="color:#c0392b">로드 실패: ${e.message}</div>`;}
+  }catch(e){listEl.innerHTML=`<div class="empty-msg" style="color:#c0392b">로드 실패: ${e.message}</div>`;return;}
+  try{
+    folders=await sbGet('folders','?order=name.asc');
+    foldersReady=true;
+  }catch(e){ folders=[]; foldersReady=false; }
+  if(curFolder!=='__all__'&&curFolder!=='__none__'&&!folders.some(f=>f.name===curFolder)) curFolder='__all__';
+  renderFolderBar();
+  renderEstList(visibleEstimates());
+}
+
+function visibleEstimates(){
+  if(curFolder==='__none__') return cachedEstimates.filter(e=>!e.folder);
+  if(curFolder!=='__all__')  return cachedEstimates.filter(e=>e.folder===curFolder);
+  return cachedEstimates;
+}
+
+function renderFolderBar(){
+  const bar=document.getElementById('folder-bar');
+  if(!bar)return;
+  if(!foldersReady){
+    bar.innerHTML='<span style="font-size:11.5px;color:var(--text3)">📁 폴더 기능이 아직 활성화되지 않았습니다 — Supabase SQL Editor에서 활성화 SQL을 한 번 실행해 주세요</span>';
+    return;
+  }
+  const counts={};let noneCnt=0;
+  cachedEstimates.forEach(e=>{ if(e.folder){counts[e.folder]=(counts[e.folder]||0)+1;} else noneCnt++; });
+  let html=`<button class="folder-chip" data-f="__all__">📁 전체 <span class="fc-cnt">${cachedEstimates.length}</span></button>`;
+  html+=`<button class="folder-chip" data-f="__none__">📂 미분류 <span class="fc-cnt">${noneCnt}</span></button>`;
+  folders.forEach(f=>{
+    html+=`<button class="folder-chip" data-f="${esc(f.name)}">📁 ${esc(f.name)} <span class="fc-cnt">${counts[f.name]||0}</span></button>`;
+  });
+  html+=`<button class="folder-mng" id="folder-add-btn">＋ 새 폴더</button>`;
+  if(curFolder!=='__all__'&&curFolder!=='__none__'){
+    html+=`<button class="folder-mng" id="folder-ren-btn">✏️ 이름변경</button>`;
+    html+=`<button class="folder-mng" id="folder-del-btn" style="color:#c0392b">🗑 폴더삭제</button>`;
+  }
+  bar.innerHTML=html;
+  bar.querySelectorAll('.folder-chip').forEach(b=>{
+    if(b.dataset.f===curFolder)b.classList.add('on');
+    b.onclick=()=>{curFolder=b.dataset.f;renderFolderBar();filterEstimates();};
+  });
+  const addB=document.getElementById('folder-add-btn'); if(addB)addB.onclick=createFolder;
+  const renB=document.getElementById('folder-ren-btn'); if(renB)renB.onclick=renameFolder;
+  const delB=document.getElementById('folder-del-btn'); if(delB)delB.onclick=deleteFolder;
+}
+
+async function createFolder(){
+  const name=(prompt('새 폴더 이름을 입력하세요 (예: NCK 항로, ABC상사)')||'').trim();
+  if(!name)return;
+  if(folders.some(f=>f.name===name)){showToast('같은 이름의 폴더가 이미 있습니다');return;}
+  try{
+    await sbUpsert('folders',{name});
+    folders=await sbGet('folders','?order=name.asc');
+    curFolder=name;
+    renderFolderBar();filterEstimates();
+    showToast(`"${name}" 폴더 생성 완료 — 각 견적의 폴더 선택으로 담아보세요`);
+  }catch(e){showToast('폴더 생성 실패: '+e.message);}
+}
+
+async function renameFolder(){
+  const old=curFolder;
+  const f=folders.find(x=>x.name===old); if(!f)return;
+  const name=(prompt('새 폴더 이름:',old)||'').trim();
+  if(!name||name===old)return;
+  if(folders.some(x=>x.name===name)){showToast('같은 이름의 폴더가 이미 있습니다');return;}
+  try{
+    await sbPatch('folders',f.id,{name});
+    await sbPatchWhere('estimates',`?folder=eq.${encodeURIComponent(old)}`,{folder:name});
+    curFolder=name;
+    await loadEstimates();
+    showToast('폴더 이름 변경 완료');
+  }catch(e){showToast('이름 변경 실패: '+e.message);}
+}
+
+async function deleteFolder(){
+  const name=curFolder;
+  const f=folders.find(x=>x.name===name); if(!f)return;
+  const cnt=cachedEstimates.filter(e=>e.folder===name).length;
+  if(!confirm(`"${name}" 폴더를 삭제할까요?\n\n폴더만 삭제되며, 안에 있던 견적 ${cnt}건은 삭제되지 않고 '미분류'로 이동합니다.`))return;
+  try{
+    await sbPatchWhere('estimates',`?folder=eq.${encodeURIComponent(name)}`,{folder:null});
+    await sbDelete('folders',f.id);
+    curFolder='__all__';
+    await loadEstimates();
+    showToast('폴더 삭제 완료 (견적은 미분류로 이동)');
+  }catch(e){showToast('폴더 삭제 실패: '+e.message);}
+}
+
+async function moveEstFolder(id,val){
+  try{
+    await sbPatch('estimates',id,{folder:val||null});
+    const e=cachedEstimates.find(x=>x.id===id);
+    if(e)e.folder=val||null;
+    renderFolderBar();filterEstimates();
+    showToast(val?`"${val}" 폴더로 이동`:'미분류로 이동');
+  }catch(e){showToast('이동 실패: '+e.message);}
 }
 
 function filterEstimates(){
   const q=document.getElementById('est-search').value.trim().toLowerCase();
-  if(!q){ renderEstList(cachedEstimates); return; }
-  const filtered=cachedEstimates.filter(e=>
+  const base=visibleEstimates();
+  if(!q){ renderEstList(base); return; }
+  const filtered=base.filter(e=>
     (e.title||'').toLowerCase().includes(q) ||
     (e.note||'').toLowerCase().includes(q)
   );
@@ -1266,10 +1394,15 @@ function renderEstList(data, q=''){
   listEl.innerHTML='<div class="estimate-list">'+data.map(e=>{
     const d=new Date(e.updated_at).toLocaleString('ko-KR',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
     const ctnInfo=`20ft ${e.cnt20}대 + 40ft ${e.cnt40}대, B/L ${e.bl}개`;
+    const folderSel=foldersReady?`<select class="est-folder-sel" data-id="${e.id}" onclick="event.stopPropagation()" onchange="moveEstFolder(this.dataset.id,this.value)">
+        <option value="">📂 미분류</option>
+        ${folders.map(f=>`<option value="${esc(f.name)}"${e.folder===f.name?' selected':''}>📁 ${esc(f.name)}</option>`).join('')}
+      </select>`:'';
     return `<div class="est-item">
       <div class="est-item-top">
         <div class="est-title">${highlight(e.title,q)}</div>
         <div class="est-actions">
+          ${folderSel}
           <button class="act-btn" onclick="compareEstimate('${e.id}','${esc(e.title)}')">⚖️ 비교</button>
           <button class="act-btn" onclick="loadEstimate('${e.id}')">불러오기</button>
           <button class="act-btn" onclick="editEstimate('${e.id}')">수정</button>
@@ -1493,7 +1626,7 @@ function loadEstimate(id){
     document.getElementById('cnt-40').value=e.cnt40||0;
     document.getElementById('bl-cnt').value=e.bl||1;
     editingEstId=id;
-    editingEstMeta={title:e.title||'',note:e.note||''};
+    editingEstMeta={title:e.title||'',note:e.note||'',folder:e.folder||''};
     switchTab('calc');
     render();
     updateEditBanner();
@@ -1511,7 +1644,7 @@ async function editEstimate(id){
     document.getElementById('cnt-40').value=e.cnt40||0;
     document.getElementById('bl-cnt').value=e.bl||1;
     editingEstId=id;
-    editingEstMeta={title:e.title||'',note:e.note||''};
+    editingEstMeta={title:e.title||'',note:e.note||'',folder:e.folder||''};
     switchTab('calc');
     render();
     updateEditBanner();
