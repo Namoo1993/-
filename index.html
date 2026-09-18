@@ -104,6 +104,14 @@ body.side-mode .tab-bar{margin-left:-24px;margin-right:-24px;padding-left:24px;p
 .folder-mng{height:26px;padding:0 8px;border:1px solid var(--border2);border-radius:6px;background:var(--surface);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;color:var(--text2)}
 .folder-mng:hover{border-color:var(--text3)}
 .est-folder-sel{height:24px;border:1px solid var(--border2);border-radius:4px;background:var(--surface);font-family:'Noto Sans KR',sans-serif;font-size:11px;color:var(--text2);outline:none;max-width:140px;cursor:pointer}
+.folder-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.folder-card{border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);padding:18px 14px;text-align:center;cursor:pointer;transition:all .12s}
+.folder-card:hover{border-color:var(--text3);transform:translateY(-1px);box-shadow:var(--shadow)}
+.fc-icon{font-size:26px;margin-bottom:6px}
+.fc-name{font-size:13px;font-weight:600;color:var(--text);word-break:break-all}
+.fc-count{font-size:11px;color:var(--text3);margin-top:2px}
+.folder-card.add{display:flex;flex-direction:column;justify-content:center;align-items:center;border-style:dashed;color:var(--text3);font-size:20px;min-height:96px}
+.folder-card.add .fc-name{font-size:12px;color:var(--text3);font-weight:500}
 .est-item:hover{border-color:var(--border2);background:var(--surface2)}
 .est-item.active{border-color:#888;background:var(--surface2)}
 .est-item-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
@@ -532,7 +540,7 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
         <span class="hdr-action" style="display:flex;gap:8px;align-items:center">
           <input id="est-search" type="text" placeholder="🔍 제목 · 메모 검색..." oninput="filterEstimates()"
             style="height:28px;padding:0 10px;border:1px solid var(--border2);border-radius:var(--r-sm);background:var(--surface);font-family:'Noto Sans KR',sans-serif;font-size:12px;color:var(--text);outline:none;width:220px">
-          <button class="act-btn" onclick="loadEstimates()">🔄 새로고침</button>
+          <button class="act-btn" onclick="loadEstimates(false)">🔄 새로고침</button>
         </span>
       </div>
       <div class="card-body">
@@ -1256,19 +1264,19 @@ let cachedEstimates = [];
 
 let folders=[];          // {id,name} 목록
 let foldersReady=false;  // folders 테이블 존재 여부
-let curFolder='__all__'; // '__all__' | '__none__' | 폴더명
+let curFolder='__home__';// '__home__'(폴더 목록) | '__all__' | '__none__' | 폴더명
 
 async function sbPatchWhere(table, query, data){
   const r=await fetch(`${SB_URL}/rest/v1/${table}${query}`,{method:'PATCH',headers:sbHeaders(),body:JSON.stringify(data)});
   if(!r.ok)throw new Error(await r.text());
 }
 
-async function loadEstimates(){
+async function loadEstimates(goHome=true){
   const listEl=document.getElementById('est-list');
   listEl.innerHTML='<div class="empty-msg">불러오는 중...</div>';
   // 검색어 초기화
   const searchEl=document.getElementById('est-search');
-  if(searchEl) searchEl.value='';
+  if(searchEl&&goHome) searchEl.value='';
   try{
     cachedEstimates=await sbGet('estimates','?order=updated_at.desc');
   }catch(e){listEl.innerHTML=`<div class="empty-msg" style="color:#c0392b">로드 실패: ${e.message}</div>`;return;}
@@ -1276,9 +1284,31 @@ async function loadEstimates(){
     folders=await sbGet('folders','?order=name.asc');
     foldersReady=true;
   }catch(e){ folders=[]; foldersReady=false; }
-  if(curFolder!=='__all__'&&curFolder!=='__none__'&&!folders.some(f=>f.name===curFolder)) curFolder='__all__';
-  renderFolderBar();
-  renderEstList(visibleEstimates());
+  if(!foldersReady){ curFolder='__all__'; renderFolderBar(); renderEstList(visibleEstimates()); return; }
+  if(goHome) curFolder='__home__';
+  if(curFolder!=='__home__'&&curFolder!=='__all__'&&curFolder!=='__none__'&&!folders.some(f=>f.name===curFolder)) curFolder='__home__';
+  if(curFolder==='__home__') renderFolderHome();
+  else { renderFolderBar(); filterEstimates(); }
+}
+
+function renderFolderHome(){
+  const bar=document.getElementById('folder-bar');
+  const listEl=document.getElementById('est-list');
+  if(bar)bar.innerHTML='';
+  const counts={};let noneCnt=0;
+  cachedEstimates.forEach(e=>{ if(e.folder){counts[e.folder]=(counts[e.folder]||0)+1;} else noneCnt++; });
+  const fCard=(val,icon,name,cnt)=>`<div class="folder-card" data-f="${esc(val)}"><div class="fc-icon">${icon}</div><div class="fc-name">${esc(name)}</div><div class="fc-count">${cnt}건</div></div>`;
+  let html='<div class="folder-grid">';
+  html+=fCard('__all__','🗂️','전체',cachedEstimates.length);
+  html+=fCard('__none__','📂','미분류',noneCnt);
+  folders.forEach(f=>{ html+=fCard(f.name,'📁',f.name,counts[f.name]||0); });
+  html+='<div class="folder-card add" id="fc-add">＋<div class="fc-name">새 폴더</div></div>';
+  html+='</div>';
+  listEl.innerHTML=html;
+  listEl.querySelectorAll('.folder-card[data-f]').forEach(c=>{
+    c.onclick=()=>{ curFolder=c.dataset.f; renderFolderBar(); filterEstimates(); };
+  });
+  const addC=document.getElementById('fc-add'); if(addC)addC.onclick=createFolder;
 }
 
 function visibleEstimates(){
@@ -1296,7 +1326,8 @@ function renderFolderBar(){
   }
   const counts={};let noneCnt=0;
   cachedEstimates.forEach(e=>{ if(e.folder){counts[e.folder]=(counts[e.folder]||0)+1;} else noneCnt++; });
-  let html=`<button class="folder-chip" data-f="__all__">📁 전체 <span class="fc-cnt">${cachedEstimates.length}</span></button>`;
+  let html=`<button class="folder-mng" id="folder-home-btn">← 폴더 목록</button>`;
+  html+=`<button class="folder-chip" data-f="__all__">🗂️ 전체 <span class="fc-cnt">${cachedEstimates.length}</span></button>`;
   html+=`<button class="folder-chip" data-f="__none__">📂 미분류 <span class="fc-cnt">${noneCnt}</span></button>`;
   folders.forEach(f=>{
     html+=`<button class="folder-chip" data-f="${esc(f.name)}">📁 ${esc(f.name)} <span class="fc-cnt">${counts[f.name]||0}</span></button>`;
@@ -1311,6 +1342,8 @@ function renderFolderBar(){
     if(b.dataset.f===curFolder)b.classList.add('on');
     b.onclick=()=>{curFolder=b.dataset.f;renderFolderBar();filterEstimates();};
   });
+  const homeB=document.getElementById('folder-home-btn');
+  if(homeB)homeB.onclick=()=>{ curFolder='__home__'; const s=document.getElementById('est-search'); if(s)s.value=''; renderFolderHome(); };
   const addB=document.getElementById('folder-add-btn'); if(addB)addB.onclick=createFolder;
   const renB=document.getElementById('folder-ren-btn'); if(renB)renB.onclick=renameFolder;
   const delB=document.getElementById('folder-del-btn'); if(delB)delB.onclick=deleteFolder;
@@ -1339,7 +1372,7 @@ async function renameFolder(){
     await sbPatch('folders',f.id,{name});
     await sbPatchWhere('estimates',`?folder=eq.${encodeURIComponent(old)}`,{folder:name});
     curFolder=name;
-    await loadEstimates();
+    await loadEstimates(false);
     showToast('폴더 이름 변경 완료');
   }catch(e){showToast('이름 변경 실패: '+e.message);}
 }
@@ -1370,6 +1403,10 @@ async function moveEstFolder(id,val){
 
 function filterEstimates(){
   const q=document.getElementById('est-search').value.trim().toLowerCase();
+  if(curFolder==='__home__'){
+    if(!q){ renderFolderHome(); return; }
+    curFolder='__all__'; renderFolderBar();   /* 폴더 화면에서 검색하면 전체에서 검색 */
+  }
   const base=visibleEstimates();
   if(!q){ renderEstList(base); return; }
   const filtered=base.filter(e=>
