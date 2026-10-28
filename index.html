@@ -458,6 +458,7 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
           <div class="cnt-wrap"><button class="cnt-btn" onclick="sadj('R','bl',-1)">−</button><input class="cnt-in" id="sR-bl" type="number" value="1" min="1" max="99" oninput="renderSide('R')"><button class="cnt-btn" onclick="sadj('R','bl',1)">+</button></div>
           <select class="tpl-select" id="sR-tpl" style="height:30px;font-size:12px;margin-left:4px" onchange="loadSideTpl('R')"><option value="">— 템플릿 —</option></select>
           <button class="tpl-btn" style="height:30px;font-size:11px" onclick="clearSide('R')">초기화</button>
+          <button class="tpl-btn" style="height:30px;font-size:11px;font-weight:600" onclick="matchSideOF()">운임 맞추기</button>
         </div>
       </div>
     </div>
@@ -825,6 +826,38 @@ function syncSideCtnTabs(){
   const is=(c20,c40)=>['L','R'].every(s=>sGetC20(s)===c20&&sGetC40(s)===c40);
   document.getElementById('side-ctn-20').className='tab-btn'+(is(1,0)?' active':'');
   document.getElementById('side-ctn-40').className='tab-btn'+(is(0,1)?' active':'');
+}
+
+// 운임 맞추기: 오른쪽 O/F 단가만 조정해 20FT·40FT 각각에서 왼쪽 총합계와 같게 만듦
+const OF_NAME_RE=/^\s*(o\s*\/?\s*f|ocean\s*freight|해상\s*운임|운임)\s*$/i;
+function matchSideOF(){
+  const ofRow=sideRows.R.find(r=>OF_NAME_RE.test(r.name||''));
+  if(!ofRow){alert('오른쪽에 O/F 항목이 없습니다. 항목명을 "O/F" 또는 "OF"로 입력해 주세요.');return;}
+  if(ofRow.basis!=='CTN'){alert('O/F 항목의 기준을 "컨테이너"로 바꿔 주세요.');return;}
+  const toCur=ofRow.cur;
+  // 20FT 또는 40FT 1대 기준으로 행 목록의 합계를 O/F 통화로 환산
+  function sumIn(rows,s,ft){
+    let t=0;
+    for(const r of rows){
+      const v=r.basis==='BL'?r.price*sGetBl(s):(ft===20?r.p20:r.p40);
+      if(!v) continue;
+      const c=convertTo(v,r.cur,toCur);
+      if(c===null) return null;
+      t+=c;
+    }
+    return t;
+  }
+  const others=sideRows.R.filter(r=>r!==ofRow);
+  const res={};
+  for(const ft of [20,40]){
+    const l=sumIn(sideRows.L,'L',ft), o=sumIn(others,'R',ft);
+    if(l===null||o===null){alert('통화가 섞여 있어 환율이 필요합니다. 환율을 불러온 뒤 다시 눌러 주세요.');return;}
+    const d=CUR_DEC[toCur]??2;
+    res[ft]=Math.round((l-o)*10**d)/10**d;
+  }
+  ofRow.p20=res[20]; ofRow.p40=res[40];
+  renderSide('R');
+  if(res[20]<0||res[40]<0) alert('왼쪽 합계가 O/F를 뺀 오른쪽 합계보다 작아 O/F가 음수로 계산되었습니다.');
 }
 
 function addSideRow(s){
