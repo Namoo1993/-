@@ -559,6 +559,12 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
 
   <!-- 비교 탭 (편집 가능한 나란히 비교) -->
   <div id="pane-compare" style="display:none">
+    <!-- 20FT/40FT 일괄 선택 -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span class="tb-label">컨테이너</span>
+      <button class="tab-btn" id="cmp-ctn-20" onclick="setCmpCtn(20)">20FT</button>
+      <button class="tab-btn" id="cmp-ctn-40" onclick="setCmpCtn(40)">40FT</button>
+    </div>
     <!-- 좌우 설정 -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
       <!-- 왼쪽 -->
@@ -1561,7 +1567,22 @@ function loadCmpTpl(s){
   renderCmp(s); showToast(`"${name}" 불러왔습니다`);
 }
 
+// 20FT/40FT 탭: 양쪽 수량을 해당 규격 1개, 나머지 0개로 설정
+function setCmpCtn(ft){
+  ['L','R'].forEach(s=>{
+    document.getElementById('c'+s+'-20').value = ft===20 ? 1 : 0;
+    document.getElementById('c'+s+'-40').value = ft===40 ? 1 : 0;
+    renderCmp(s);
+  });
+}
+function syncCmpCtnTabs(){
+  const is=(c20,c40)=>['L','R'].every(s=>cGetC20(s)===c20&&cGetC40(s)===c40);
+  document.getElementById('cmp-ctn-20').className='tab-btn'+(is(1,0)?' active':'');
+  document.getElementById('cmp-ctn-40').className='tab-btn'+(is(0,1)?' active':'');
+}
+
 function renderCmp(s){
+  syncCmpCtnTabs();
   const tbody=document.getElementById('c'+s+'-rows');
   if(!cmpRows[s].length){
     tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3);font-size:12px">항목을 추가하세요</td></tr>`;
