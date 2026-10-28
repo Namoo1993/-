@@ -422,6 +422,12 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
 
   <!-- 나란히 비교 탭 -->
   <div id="pane-side" style="display:none">
+    <!-- 20FT/40FT 일괄 선택 -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span class="tb-label">컨테이너</span>
+      <button class="tab-btn" id="side-ctn-20" onclick="setSideCtn(20)">20FT</button>
+      <button class="tab-btn" id="side-ctn-40" onclick="setSideCtn(40)">40FT</button>
+    </div>
     <!-- 좌우 각각 컨테이너/BL 설정 -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
 
@@ -807,6 +813,20 @@ function sadj(s,type,delta){
   renderSide(s);
 }
 
+// 20FT/40FT 탭: 양쪽 수량을 해당 규격 1개, 나머지 0개로 설정
+function setSideCtn(ft){
+  ['L','R'].forEach(s=>{
+    document.getElementById('s'+s+'-20').value = ft===20 ? 1 : 0;
+    document.getElementById('s'+s+'-40').value = ft===40 ? 1 : 0;
+    renderSide(s);
+  });
+}
+function syncSideCtnTabs(){
+  const is=(c20,c40)=>['L','R'].every(s=>sGetC20(s)===c20&&sGetC40(s)===c40);
+  document.getElementById('side-ctn-20').className='tab-btn'+(is(1,0)?' active':'');
+  document.getElementById('side-ctn-40').className='tab-btn'+(is(0,1)?' active':'');
+}
+
 function addSideRow(s){
   sideRows[s].push({name:'',cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0});
   renderSide(s);
@@ -846,6 +866,7 @@ function loadSideTpl(s){
 }
 
 function renderSide(s){
+  syncSideCtnTabs();
   const tbody=document.getElementById('s'+s+'-rows');
   const c20=sGetC20(s), c40=sGetC40(s);
   if(!sideRows[s].length){
