@@ -1955,7 +1955,7 @@ function renderGuideCal(){
     const ym=`${guideYear}-${String(m).padStart(2,'0')}`;
     const has=!!guideData[ym];
     const cls='cal-m'+(has?' has':'')+(ym===guideYm?' on':'')+(ym===todayYm?' today':'');
-    h+=`<button class="${cls}" ${has?`onclick="selectGuideMonth('${ym}')"`:'disabled'}>${m}월${has?'<small>GUIDE</small>':''}</button>`;
+    h+=`<button class="${cls}" ${has?`onclick="selectGuideMonth('${ym}')"`:'disabled'}>${m}월</button>`;
   }
   document.getElementById('g-cal').innerHTML=h;
   const info=document.getElementById('g-info');
@@ -2079,7 +2079,7 @@ function loadGuideLane(i,port){
   }else{
     guideAllowedSur(sec,lane).forEach(n=>
       newRows.push({name:n,cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:''}));
-    surNote='<span class="g-spin"></span>Surcharge 데이터 업데이트 중… (완료되면 자동으로 채워집니다)';
+    surNote='<span class="g-spin"></span>Surcharge 데이터 업데이트 중…';
     watchGuideSur(guideYm);
   }
   rows=newRows;
