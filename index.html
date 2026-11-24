@@ -1886,6 +1886,9 @@ async function deleteEstimate(id){
    - guide_surcharges : id='YYYY-MM', data={lanes:{'나라|POL|POD':{rows:[...]}}} (ebiz 기준 Surcharge, 있을 때만)
 ══════════════════════════════════════════ */
 const GUIDE_COUNTRIES=['중국','일본','동남아'];
+/* 기본 부대비용은 ebiz 금액을 항상 넣고, 그 밖의 Surcharge는 엑셀 POL/POD Surcharge 칸(RF는 비고의 'RF는 … 별도' 포함)에 적힌 것만 넣는다 */
+const GUIDE_BASE_CHG=['THL','DOL','SLC','THD','DOD','CLF','WFG','PSF','CSC'];
+const GUIDE_SUR_OVERRIDE={'일본|HKT / MOJ|BUSAN':['EFS']};   /* 하카타·모지→부산은 EFS만 (사용자 지정) */
 const PORT_KO={KRPUS:'부산',KRKAN:'광양',KRINC:'인천',KRPTK:'평택',KRKUV:'군산',KRUSN:'울산'};
 const XLSX_CDN='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
 let guideData={}, guideSur={}, guideLoaded=false;
@@ -1954,11 +1957,7 @@ function renderGuideCal(){
   const info=document.getElementById('g-info');
   const g=guideData[guideYm];
   if(g){
-    const d=g.data||{};
-    const t=g.updated_at?new Date(g.updated_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-    info.innerHTML=`<b style="color:var(--text2)">${+guideYm.slice(0,4)%100}년 ${+guideYm.slice(5)}월 GUIDE</b>`
-      +(d.asof?` · 기준일 ${esc(d.asof)}`:'')+`<br>${esc(g.file_name||'')}`
-      +(g.uploaded_by||t?`<br>올린 사람 ${esc(g.uploaded_by||'')} ${t}`:'');
+    info.textContent='';
   }else if(guideLoaded){
     info.textContent=Object.keys(guideData).length?'GUIDE가 있는 월(진하게 표시)을 고르세요.':'아직 올라온 GUIDE가 없습니다. 아래 버튼으로 엑셀을 올려 주세요.';
   }
@@ -2027,6 +2026,19 @@ function splitSurNames(s){
   return String(s||'').split(/[\/,]/).map(x=>x.trim().toUpperCase()).filter(x=>x&&x!=='-');
 }
 
+function guideAllowedSur(sec,lane){
+  const key=`${sec.name}|${lane.pol}|${lane.pod}`;
+  const set=new Set();
+  if(GUIDE_SUR_OVERRIDE[key]) GUIDE_SUR_OVERRIDE[key].forEach(n=>set.add(n));
+  else [lane.polSur,lane.podSur].forEach(s=>splitSurNames(s).forEach(n=>set.add(n)));
+  if(guideType==='RF'){
+    const m=String(lane.remark||'').match(/RF[^\n]*/i);
+    if(m) (m[0].slice(2).match(/\b[A-Z]{3}\b/g)||[]).forEach(n=>set.add(n));
+  }
+  GUIDE_BASE_CHG.forEach(n=>set.delete(n));
+  return set;
+}
+
 function loadGuideLane(i,port){
   const sec=curGuideSection(); if(!sec) return;
   const lane=sec.rows[i], rt=laneRates(lane,sec);
@@ -2045,7 +2057,9 @@ function loadGuideLane(i,port){
   const surRows=sur&&((sur.ports&&sur.ports[guidePort])||sur.rows);
   if(pods.length>1) portBtns='<span class="g-seg">'+pods.map(c=>`<button class="tab-btn${c===guidePort?' active':''}" style="padding:3px 10px;font-size:11px" onclick="loadGuideLane(${i},'${c}')">${PORT_KO[c]||c}</button>`).join('')+'</span>';
   if(Array.isArray(surRows)&&surRows.length){
+    const allowed=guideAllowedSur(sec,lane);
     surRows.forEach(r=>{
+      if(!GUIDE_BASE_CHG.includes(r.name)&&!allowed.has(r.name)) return;
       const v=(guideType==='RF'?r.rf:r.dry)||{};
       const p20=+v.p20||0, p40=+v.p40||0, bl=+v.bl||0;
       if(!p20&&!p40&&!bl) return;              /* 이 컨테이너 종류에 없는 항목 */
@@ -2053,23 +2067,17 @@ function loadGuideLane(i,port){
       newRows.push({name:r.name,cur:r.cur||'USD',p20:isBL?0:p20,q20:0,p40:isBL?0:p40,q40:0,
         basis:isBL?'BL':'CTN',price:isBL?bl:0,memo:''});
     });
-    surNote=`Surcharge: ebiz ${esc(sur.date||'')} 기준 (${esc(sur.pol)}→${esc(guidePort||sur.pod)})`;
+    surNote='';
   }else{
-    const seen=new Set();
-    [['POL',lane.polSur],['POD',lane.podSur]].forEach(([side,s])=>splitSurNames(s).forEach(n=>{
-      if(seen.has(n)) return; seen.add(n);
-      newRows.push({name:n,cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:`${side} Surcharge (금액 입력)`});
-    }));
+    guideAllowedSur(sec,lane).forEach(n=>
+      newRows.push({name:n,cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:'금액 입력'}));
     surNote='Surcharge 금액 없음 — PC에서 guide-surcharge\run_guide_surcharge.bat 을 실행하면 ebiz 금액이 채워집니다';
   }
   rows=newRows;
   const ban=document.getElementById('g-banner');
   ban.style.display='flex';
   ban.innerHTML=`<b>${esc(lane.pol.replace(/\n/g,' '))} → ${esc(lane.pod.replace(/\n/g,' '))}</b>`
-    +`<span class="g-chip">${esc(sec.name)} · ${ymLabel} GUIDE · ${guideType}</span>`
-    +(lane.polSur&&lane.polSur!=='-'?`<span class="g-chip">POL Surcharge: ${esc(lane.polSur)}</span>`:'')
-    +(lane.podSur&&lane.podSur!=='-'?`<span class="g-chip">POD Surcharge: ${esc(lane.podSur)}</span>`:'')
-    +`<span class="g-chip">${surNote}</span>`+portBtns;
+    +portBtns+(surNote?`<span class="g-chip">${surNote}</span>`:'');
   document.getElementById('g-empty').style.display='none';
   document.getElementById('pane-calc').style.display='block';
   render();
