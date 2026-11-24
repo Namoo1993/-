@@ -285,6 +285,23 @@ table.lane-tbl{min-width:0;table-layout:auto;font-size:12px}
 .av-opt svg{width:100%;height:100%;border-radius:50%}
 .av-sw{width:70%;height:70%;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
 @media(max-width:900px){.rate-wrap{grid-template-columns:1fr}.rate-left{position:static}.av-body{grid-template-columns:1fr}}
+.rf-drop{border:1.5px dashed var(--border2);border-radius:var(--r);background:var(--surface);padding:22px;text-align:center;color:var(--text2);font-size:13px;cursor:pointer;transition:all .12s}
+.rf-drop:hover,.rf-drop.over{border-color:var(--green);background:var(--green-bg);color:var(--green)}
+.rf-filters{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.rf-icon{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;margin-bottom:10px;box-shadow:var(--shadow);font-size:13px}
+.rf-log{background:#1d1b16;color:#d9d4c7;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6;border-radius:var(--r-sm);padding:10px 12px;max-height:220px;overflow:auto;margin-bottom:10px}
+.rf-log .err{color:#ff8a80}.rf-log .ok{color:#9be29f}.rf-log .warn{color:#f3c86b}
+table.rf-tbl{min-width:760px;table-layout:auto;font-size:12.5px}
+.rf-tbl thead th{padding:7px 10px}
+.rf-tbl td{padding:6px 10px}
+.rf-ship{font-weight:600}
+.rf-mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+.rf-name{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rf-month{border:1px solid var(--border2);border-radius:4px;padding:2px 4px;font-family:'Noto Sans KR',sans-serif;font-size:12px;background:var(--surface2)}
+.rf-st{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text3)}
+.rf-st.ok{background:var(--green-bg);border-color:var(--green-bd);color:var(--green)}
+.rf-st.ng{background:#fde8e8;border-color:#e8aaaa;color:#c0392b}
+.rf-st.dry{background:#fff8e6;border-color:#e8c47a;color:#7a4800}
 </style>
 </head>
 <body>
@@ -442,7 +459,7 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
         </div>
         <div id="rate-folder" style="display:none">
           <div class="rate-folder-head" id="rate-folder-head"></div>
-          <div class="g-empty">아직 첨부된 파일이 없습니다.</div>
+          <div id="rate-folder-body"></div>
         </div>
       </div>
     </div>
@@ -2440,11 +2457,241 @@ function avatarSVG(av,size,bgSeed){
     </g></svg>`;
 }
 
+/* ══════════════════════════════════════════
+   RATE INPUT — 담당자 폴더 파일 (rate_files 표 + Storage 'rate-files' 버킷)
+══════════════════════════════════════════ */
+const RATE_BUCKET='rate-files';
+let rateFiles=[], rateMonth='', rateShipper='';
+let iconExt={ready:false,version:''}, iconRun=null;
+
+function stHeaders(extra){ return Object.assign({'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},extra||{}); }
+async function stPut(path,blob){
+  const r=await fetch(`${SB_URL}/storage/v1/object/${RATE_BUCKET}/${path}`,{method:'POST',
+    headers:stHeaders({'x-upsert':'true','Content-Type':blob.type||'application/octet-stream'}),body:blob});
+  if(!r.ok) throw new Error(await r.text());
+}
+async function stGet(path){
+  const r=await fetch(`${SB_URL}/storage/v1/object/${RATE_BUCKET}/${path}`,{headers:stHeaders()});
+  if(!r.ok) throw new Error(await r.text());
+  return r.blob();
+}
+async function stDel(path){
+  const r=await fetch(`${SB_URL}/storage/v1/object/${RATE_BUCKET}`,{method:'DELETE',
+    headers:stHeaders({'Content-Type':'application/json'}),body:JSON.stringify({prefixes:[path]})});
+  if(!r.ok) throw new Error(await r.text());
+}
+
+async function loadRateFiles(){
+  try{ rateFiles=await sbGet('rate_files','?select=*&order=created_at.desc'); }
+  catch(e){ rateFiles=[]; rateFilesErr=String(e.message||e); return; }
+  rateFilesErr='';
+}
+let rateFilesErr='';
+function staffFiles(id){ return rateFiles.filter(f=>f.staff_id===id); }
+
+/* 파일 이름 'KS해운 AS10KSSIMP.xlsx' → 화주 'KS해운', AS번호 'AS10KSSIMP' */
+function parseRateFileName(name){
+  const base=String(name).replace(/\.[^.]+$/,'').trim();
+  const m=base.match(/^(.*?)[\s_\-]*(AS[0-9A-Z]{3,})\s*$/i);
+  if(m&&m[1].trim()) return {shipper:m[1].trim(),asNo:m[2].toUpperCase()};
+  return {shipper:base,asNo:''};
+}
+/* 시트 이름 '26.11월' 같은 날짜 시트 중 가장 늦은 달 → 'YYYY-MM' */
+async function detectRateMonth(file){
+  try{
+    await loadXlsxLib();
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array',bookSheets:true});
+    const ms=wb.SheetNames.map(n=>{ const m=n.match(/(\d{2})\.(\d{1,2})월/); return m?`${2000+ +m[1]}-${String(+m[2]).padStart(2,'0')}`:''; }).filter(Boolean).sort();
+    return ms.pop()||'';
+  }catch(e){ return ''; }
+}
+function ymLabelK(ym){ return ym?`${+ym.slice(0,4)%100}년 ${+ym.slice(5)}월`:'월 미지정'; }
+
+async function onRateUpload(fileList){
+  const p=rateStaff.find(x=>x.id===rateOpenId); if(!p) return;
+  const files=[...fileList].filter(f=>/\.xlsx?$/i.test(f.name));
+  if(!files.length){ showToast('엑셀 파일(.xlsx)만 올릴 수 있습니다'); return; }
+  const status=document.getElementById('rate-upload-status');
+  let ok=0, fail=0;
+  for(const [k,f] of files.entries()){
+    status.innerHTML=`<span class="g-spin"></span>업로드 중… ${k+1}/${files.length} ${esc(f.name)}`;
+    try{
+      const {shipper,asNo}=parseRateFileName(f.name);
+      const now=new Date();
+      const ym=(await detectRateMonth(f))||rateMonth||`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+      const same=rateFiles.find(x=>x.staff_id===p.id&&x.month===ym&&x.file_name===f.name);
+      const id=same?same.id:(crypto.randomUUID?crypto.randomUUID():'f'+Date.now().toString(36)+Math.random().toString(36).slice(2,8));
+      const path=`${p.id}/${ym}/${id}.xlsx`;
+      await stPut(path,f);
+      const rec={id,staff_id:p.id,shipper,as_no:asNo,month:ym,file_name:f.name,path,size:f.size,
+        uploaded_by:MY_NAME,created_at:new Date().toISOString(),icon_status:null,icon_at:null};
+      await sbUpsert('rate_files',rec);
+      if(same) Object.assign(same,rec); else rateFiles.unshift(rec);
+      ok++;
+    }catch(e){
+      fail++; console.error(e);
+      const msg=String(e.message||e);
+      showToast(/rate_files|Bucket|bucket|does not exist|PGRST|policy|security/i.test(msg)?'Supabase 파일 저장소 설정이 필요합니다 (SQL 실행)':'업로드 실패: '+f.name);
+    }
+  }
+  status.textContent='';
+  if(ok) showToast(`${ok}개 파일 저장 완료`+(fail?` · 실패 ${fail}개`:''));
+  renderRate();
+}
+
+function setRateMonth(ym){ rateMonth=ym; renderRate(); }
+function setRateShipper(s){ rateShipper=s; renderRate(); }
+
+function rateVisibleFiles(id){
+  return staffFiles(id).filter(f=>(!rateMonth||f.month===rateMonth)&&(!rateShipper||f.shipper===rateShipper));
+}
+
+function renderRateFolderBody(p){
+  const all=staffFiles(p.id);
+  const months=[...new Set(all.map(f=>f.month).filter(Boolean))].sort().reverse();
+  if(rateMonth&&!months.includes(rateMonth)) rateMonth='';
+  const shippers=[...new Set(all.filter(f=>!rateMonth||f.month===rateMonth).map(f=>f.shipper))].sort((a,b)=>a.localeCompare(b,'ko'));
+  if(rateShipper&&!shippers.includes(rateShipper)) rateShipper='';
+  const list=rateVisibleFiles(p.id);
+  const fmtSize=n=>n>1048576?(n/1048576).toFixed(1)+'MB':Math.max(1,Math.round(n/1024))+'KB';
+  const fmtDate=d=>d?new Date(d).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+  const stBadge=f=>!f.icon_status?'<span class="rf-st">미입력</span>'
+    :`<span class="rf-st ${f.icon_status==='완료'?'ok':f.icon_status==='실패'?'ng':'dry'}" title="${esc(fmtDate(f.icon_at))}">${esc(f.icon_status)}</span>`;
+
+  const head=`
+    <div class="rf-drop" id="rf-drop" onclick="document.getElementById('rf-input').click()"
+      ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')"
+      ondrop="event.preventDefault();this.classList.remove('over');onRateUpload(event.dataTransfer.files)">
+      📎 운임 파일(.xlsx)을 여기에 끌어다 놓거나 <b>클릭해서 업로드</b>하세요
+      <div class="rate-sub">파일 이름의 AS번호 앞부분을 화주명으로, 엑셀의 'YY.M월' 시트로 적용 월을 정합니다</div>
+    </div>
+    <input type="file" id="rf-input" accept=".xlsx,.xls" multiple style="display:none" onchange="onRateUpload(this.files);this.value=''">
+    <div class="g-info" id="rate-upload-status" style="margin:6px 0 10px"></div>
+    <div class="rf-filters">
+      <div class="g-seg">
+        <button class="tab-btn${!rateMonth?' active':''}" onclick="setRateMonth('')">전체 월</button>
+        ${months.map(m=>`<button class="tab-btn${m===rateMonth?' active':''}" onclick="setRateMonth('${m}')">${ymLabelK(m)}</button>`).join('')}
+      </div>
+      <select class="tpl-select" onchange="setRateShipper(this.value)">
+        <option value="">화주 전체 (${shippers.length})</option>
+        ${shippers.map(s=>`<option value="${esc(s)}"${s===rateShipper?' selected':''}>${esc(s)}</option>`).join('')}
+      </select>
+    </div>`;
+
+  const iconBar=rateMonth?`
+    <div class="rf-icon">
+      <div style="flex:1">
+        <b>${ymLabelK(rateMonth)} ICON 운임 입력</b>
+        <span class="rate-sub" style="margin-left:6px">${list.length}개 파일 · 유효기간 ${rateMonth}-01 ~ ${rateMonth}-${new Date(+rateMonth.slice(0,4),+rateMonth.slice(5),0).getDate()} · 기존 운임 유지</span>
+        <div class="rate-sub" id="rf-ext">${iconExt.ready?`🟢 ICON 확장 프로그램 연결됨 (v${esc(iconExt.version)})`:'⚪ ICON 확장 프로그램(v2.3) 연결 안 됨 — 확장 프로그램을 새로고침한 뒤 이 페이지도 새로고침하세요'}</div>
+      </div>
+      <label class="rate-sub" style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="rf-dry"> 확인 모드(저장 안 함)</label>
+      ${iconRun?`<button class="tpl-btn danger" onclick="stopIconRun()">중단</button>`
+               :`<button class="tpl-btn primary" ${list.length&&iconExt.ready?'':'disabled style="opacity:.45;cursor:not-allowed"'} onclick="startIconRun()">ICON 입력 시작</button>`}
+    </div>
+    <div class="rf-log" id="rf-log" style="${iconRun||(iconRunLog.length&&iconRunLogStaff===p.id)?'':'display:none'}">${iconRunLog.map(l=>`<div class="${l.level||''}">${esc(l.text)}</div>`).join('')}</div>`
+    :`<div class="rate-sub" style="margin:4px 0 10px">ICON에 입력하려면 위에서 월을 고르세요.</div>`;
+
+  const table=list.length?`
+    <div class="tbl-wrap"><table class="rf-tbl">
+      <thead><tr><th>화주</th><th>AS번호</th><th>적용 월</th><th>파일명</th><th>올린 날짜</th><th>ICON</th><th></th></tr></thead>
+      <tbody>${list.map(f=>`<tr>
+        <td class="rf-ship">${esc(f.shipper)}</td>
+        <td class="rf-mono">${esc(f.as_no||'—')}</td>
+        <td><input type="month" class="rf-month" value="${esc(f.month||'')}" onchange="changeRateFileMonth('${f.id}',this.value)"></td>
+        <td class="rf-name" title="${esc(f.file_name)}">${esc(f.file_name)} <span class="rate-sub">${fmtSize(f.size||0)}</span></td>
+        <td class="rate-sub">${fmtDate(f.created_at)}</td>
+        <td>${stBadge(f)}</td>
+        <td style="white-space:nowrap;text-align:right"><button class="act-btn" onclick="downloadRateFile('${f.id}')">다운로드</button> <button class="act-btn danger" onclick="deleteRateFile('${f.id}')">삭제</button></td>
+      </tr>`).join('')}</tbody></table></div>`
+    :`<div class="g-empty">${all.length?'선택한 조건에 맞는 파일이 없습니다.':'아직 첨부된 파일이 없습니다.'}</div>`;
+
+  return head+iconBar+table;
+}
+
+async function changeRateFileMonth(id,ym){
+  const f=rateFiles.find(x=>x.id===id); if(!f||!ym) return;
+  try{ await sbPatch('rate_files',id,{month:ym}); f.month=ym; renderRate(); showToast(`${ymLabelK(ym)}로 옮겼습니다`); }
+  catch(e){ showToast('변경 실패: '+e.message); }
+}
+async function downloadRateFile(id){
+  const f=rateFiles.find(x=>x.id===id); if(!f) return;
+  try{
+    const blob=await stGet(f.path);
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=f.file_name;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  }catch(e){ showToast('다운로드 실패: '+e.message); }
+}
+async function deleteRateFile(id){
+  const f=rateFiles.find(x=>x.id===id); if(!f) return;
+  if(!confirm(`${f.file_name} 파일을 삭제할까요?`)) return;
+  try{ await stDel(f.path).catch(()=>{}); await sbDelete('rate_files',id); rateFiles=rateFiles.filter(x=>x.id!==id); renderRate(); showToast('삭제했습니다'); }
+  catch(e){ showToast('삭제 실패: '+e.message); }
+}
+
+/* ── ICON 확장 프로그램 연결 (site_bridge.js) ── */
+let iconRunLog=[], iconRunLogStaff=null;
+window.addEventListener('message',e=>{
+  if(e.source!==window||!e.data||e.data.source!=='icon-ext') return;
+  const d=e.data;
+  if(d.type==='READY'){ iconExt={ready:true,version:d.version||''}; if(document.getElementById('rf-ext')) renderRate(); }
+  if(d.type==='ACK'&&d.res&&!d.res.ok){ addIconLog('시작 실패: '+(d.res.error||''),'err'); finishIconRun(null); }
+  if(d.type==='LOG') addIconLog(d.message,d.level);
+  if(d.type==='DONE') finishIconRun(d.result);
+});
+function pingIconExt(){ window.postMessage({source:'rate-input',type:'PING'},'*'); }
+function addIconLog(text,level){
+  iconRunLog.push({text,level}); if(iconRunLog.length>400) iconRunLog.shift();
+  const box=document.getElementById('rf-log');
+  if(box){ box.style.display='block'; const div=document.createElement('div'); div.className=level||''; div.textContent=text; box.appendChild(div); box.scrollTop=box.scrollHeight; }
+}
+function blobToBase64(blob){
+  return new Promise((ok,ng)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(',')[1]); r.onerror=ng; r.readAsDataURL(blob); });
+}
+async function startIconRun(){
+  const p=rateStaff.find(x=>x.id===rateOpenId); if(!p||!rateMonth) return;
+  const list=rateVisibleFiles(p.id);
+  if(!list.length) return;
+  const dry=document.getElementById('rf-dry')?.checked;
+  if(!confirm(`${p.name} · ${ymLabelK(rateMonth)} 파일 ${list.length}개를 ICON에 입력할까요?\n유효기간 ${rateMonth} 한 달, 기존 운임은 지우지 않습니다.`+(dry?'\n(확인 모드: 저장하지 않음)':''))) return;
+  iconRunLog=[]; iconRunLogStaff=p.id;
+  iconRun={staff:p.id,month:rateMonth,files:list.map(f=>f.id),dry:!!dry};
+  renderRate();
+  addIconLog(`파일 ${list.length}개 준비 중…`,'info');
+  try{
+    const files=[];
+    for(const f of list){ files.push({name:f.file_name,data:await blobToBase64(await stGet(f.path))}); }
+    window.postMessage({source:'rate-input',type:'RUN',month:rateMonth,dryRun:!!dry,files},'*');
+    addIconLog('ICON 확장 프로그램에 전달했습니다. 새 ICON 탭에서 입력이 진행됩니다.','info');
+  }catch(e){ addIconLog('파일 준비 실패: '+e.message,'err'); finishIconRun(null); }
+}
+function stopIconRun(){ window.postMessage({source:'rate-input',type:'STOP'},'*'); addIconLog('중단 요청을 보냈습니다','warn'); }
+async function finishIconRun(result){
+  const run=iconRun; iconRun=null;
+  if(run&&result){
+    const res=result.results||{};
+    const now=new Date().toISOString();
+    for(const id of run.files){
+      const f=rateFiles.find(x=>x.id===id); if(!f) continue;
+      let st=null;
+      if(run.dry) st='확인모드';
+      else if(f.as_no&&f.as_no in res) st=res[f.as_no]?'완료':'실패';
+      else if((result.skipped||[]).includes(f.file_name)) st='실패';
+      if(!st) continue;
+      f.icon_status=st; f.icon_at=now;
+      try{ await sbPatch('rate_files',id,{icon_status:st,icon_at:now}); }catch(e){}
+    }
+    addIconLog(result.ok?'ICON 입력이 끝났습니다':'ICON 입력 오류: '+(result.error||''), result.ok?'ok':'err');
+  }
+  renderRate();
+}
+
 let rateStaff=[], rateLoaded=false, rateOpenId=null;
 let avEdit={id:null,name:'',av:{...AV_DEFAULT}};
 
 async function openRate(){
-  if(!rateLoaded) await loadRateStaff();
+  if(!rateLoaded){ await loadRateStaff(); await loadRateFiles(); }
+  pingIconExt();
   renderRate();
 }
 
@@ -2476,7 +2723,7 @@ function renderRate(){
       ?rateStaff.map(p=>`<div class="rate-card" onclick="openRateFolder('${p.id}')">
           <div class="rate-av">${avatarSVG(p.avatar,84,p.id)}</div>
           <div class="rate-name">${esc(p.name)}</div>
-          <div class="rate-sub">파일 0개</div>
+          <div class="rate-sub">파일 ${staffFiles(p.id).length}개</div>
         </div>`).join('')
         +`<div class="rate-card add" onclick="openAvatarEditor()"><div class="rate-plus">＋</div><div class="rate-name" style="color:var(--text3);font-weight:500">담당자 추가</div></div>`
       :`<div class="g-empty" style="grid-column:1/-1">아직 담당자가 없습니다.<br>왼쪽 <b>담당자 추가</b>로 영업사원을 등록하세요.</div>`;
@@ -2485,13 +2732,16 @@ function renderRate(){
     document.getElementById('rate-folder-head').innerHTML=
       `<button class="tpl-btn" onclick="closeRateFolder()">← 전체 담당자</button>
        <div class="rate-folder-av">${avatarSVG(p.avatar,56,p.id)}</div>
-       <div style="flex:1"><div style="font-size:17px;font-weight:700">${esc(p.name)}</div><div class="rate-sub">파일 0개</div></div>
+       <div style="flex:1"><div style="font-size:17px;font-weight:700">${esc(p.name)}</div><div class="rate-sub">파일 ${staffFiles(p.id).length}개</div></div>
        <button class="tpl-btn warn" onclick="openAvatarEditor('${p.id}')">수정</button>
        <button class="tpl-btn danger" onclick="deleteRateStaff('${p.id}')">삭제</button>`;
+    document.getElementById('rate-folder-body').innerHTML=rateFilesErr
+      ?`<div class="g-empty" style="color:#c0392b">${/rate_files|does not exist|PGRST/.test(rateFilesErr)?'Supabase에 rate_files 표가 아직 없습니다. SQL을 먼저 실행해 주세요.':'파일 목록 불러오기 실패: '+esc(rateFilesErr)}</div>`
+      :renderRateFolderBody(p);
   }
 }
 
-function openRateFolder(id){ rateOpenId=id; renderRate(); }
+function openRateFolder(id){ if(rateOpenId!==id){ rateMonth=''; rateShipper=''; } rateOpenId=id; renderRate(); }
 function closeRateFolder(){ rateOpenId=null; renderRate(); }
 
 function openAvatarEditor(id){
