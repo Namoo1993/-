@@ -1886,9 +1886,10 @@ async function deleteEstimate(id){
    - guide_surcharges : id='YYYY-MM', data={lanes:{'나라|POL|POD':{rows:[...]}}} (ebiz 기준 Surcharge, 있을 때만)
 ══════════════════════════════════════════ */
 const GUIDE_COUNTRIES=['중국','일본','동남아'];
+const PORT_KO={KRPUS:'부산',KRKAN:'광양',KRINC:'인천',KRPTK:'평택',KRKUV:'군산',KRUSN:'울산'};
 const XLSX_CDN='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
 let guideData={}, guideSur={}, guideLoaded=false;
-let guideYear=new Date().getFullYear(), guideYm='', guideCtry='중국', guideType='DRY', guideLane=null;
+let guideYear=new Date().getFullYear(), guideYm='', guideCtry='중국', guideType='DRY', guideLane=null, guidePort='';
 
 function placeCalcPane(inGuide){
   const pc=document.getElementById('pane-calc');
@@ -2026,19 +2027,25 @@ function splitSurNames(s){
   return String(s||'').split(/[\/,]/).map(x=>x.trim().toUpperCase()).filter(x=>x&&x!=='-');
 }
 
-function loadGuideLane(i){
+function loadGuideLane(i,port){
   const sec=curGuideSection(); if(!sec) return;
   const lane=sec.rows[i], rt=laneRates(lane,sec);
   if(!rt) return;
+  if(i!==guideLane&&port===undefined) guidePort='';
+  if(port!==undefined) guidePort=port;
   guideLane=i;
   const ymLabel=`${+guideYm.slice(0,4)%100}년 ${+guideYm.slice(5)}월`;
   const newRows=[{name:'O/F',cur:'USD',p20:rt.p20||0,q20:0,p40:rt.p40||0,q40:0,basis:'CTN',price:0,
     memo:`GUIDE ${ymLabel} ${guideType} (${rt.h20}/${rt.h40})`}];
   const key=`${sec.name}|${lane.pol}|${lane.pod}`;
   const sur=guideSur[guideYm]&&guideSur[guideYm].data&&guideSur[guideYm].data.lanes&&guideSur[guideYm].data.lanes[key];
-  let surNote;
-  if(sur&&Array.isArray(sur.rows)&&sur.rows.length){
-    sur.rows.forEach(r=>{
+  let surNote, portBtns='';
+  const pods=(sur&&sur.pods)||[];
+  if(!pods.includes(guidePort)) guidePort=pods[0]||'';
+  const surRows=sur&&((sur.ports&&sur.ports[guidePort])||sur.rows);
+  if(pods.length>1) portBtns='<span class="g-seg">'+pods.map(c=>`<button class="tab-btn${c===guidePort?' active':''}" style="padding:3px 10px;font-size:11px" onclick="loadGuideLane(${i},'${c}')">${PORT_KO[c]||c}</button>`).join('')+'</span>';
+  if(Array.isArray(surRows)&&surRows.length){
+    surRows.forEach(r=>{
       const v=(guideType==='RF'?r.rf:r.dry)||{};
       const p20=+v.p20||0, p40=+v.p40||0, bl=+v.bl||0;
       if(!p20&&!p40&&!bl) return;              /* 이 컨테이너 종류에 없는 항목 */
@@ -2046,7 +2053,7 @@ function loadGuideLane(i){
       newRows.push({name:r.name,cur:r.cur||'USD',p20:isBL?0:p20,q20:0,p40:isBL?0:p40,q40:0,
         basis:isBL?'BL':'CTN',price:isBL?bl:0,memo:''});
     });
-    surNote=`Surcharge: ebiz ${esc(sur.date||'')} 기준 (${esc(sur.pol)}→${esc(sur.pod)})`;
+    surNote=`Surcharge: ebiz ${esc(sur.date||'')} 기준 (${esc(sur.pol)}→${esc(guidePort||sur.pod)})`;
   }else{
     const seen=new Set();
     [['POL',lane.polSur],['POD',lane.podSur]].forEach(([side,s])=>splitSurNames(s).forEach(n=>{
@@ -2062,7 +2069,7 @@ function loadGuideLane(i){
     +`<span class="g-chip">${esc(sec.name)} · ${ymLabel} GUIDE · ${guideType}</span>`
     +(lane.polSur&&lane.polSur!=='-'?`<span class="g-chip">POL Surcharge: ${esc(lane.polSur)}</span>`:'')
     +(lane.podSur&&lane.podSur!=='-'?`<span class="g-chip">POD Surcharge: ${esc(lane.podSur)}</span>`:'')
-    +`<span class="g-chip">${surNote}</span>`;
+    +`<span class="g-chip">${surNote}</span>`+portBtns;
   document.getElementById('g-empty').style.display='none';
   document.getElementById('pane-calc').style.display='block';
   render();
