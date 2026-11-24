@@ -2308,14 +2308,14 @@ async function onGuideFile(input){
    rate_staff : id, name, avatar{hair,face,skin,eyeColor,eyeShape,nose,mouth}, created_at
 ══════════════════════════════════════════ */
 const AV_PARTS=[
-  {key:'gender',label:'성별'},{key:'hair',label:'머리스타일'},{key:'face',label:'얼굴모양'},{key:'skin',label:'피부색'},
+  {key:'gender',label:'성별'},{key:'hair',label:'머리스타일'},{key:'hairColor',label:'머리색',n:15},{key:'face',label:'얼굴모양'},{key:'skin',label:'피부색'},
   {key:'eyeColor',label:'눈색'},{key:'eyeShape',label:'눈모양'},{key:'nose',label:'코모양'},{key:'mouth',label:'입모양'}
 ];
 const AV_SKIN=['#FDE7D6','#F9D9C0','#F3C7A6','#E9B48C','#DA9F76','#C68761','#AD704C','#8F593A','#6F432B','#4E2E1E'];
 const AV_EYE=['#3B2416','#6B4423','#1C1C1C','#2E6DB4','#4A9BE0','#3C8D5A','#7A8B99','#8E5BB5','#B07D2B','#2A9D8F'];
-const AV_HAIR_COLOR='#2B2118';
+const AV_HAIR_COLORS=['#141414','#2B2118','#3D2817','#5A3A22','#6B4429','#6E6258','#8A6A4F','#A8743A','#D8B26A','#8D8D8D','#C9C9C9','#6E1F2B','#9C3B2E','#4A5D7A','#C47A8A'];
 const AV_BG=['#F4E3C9','#DDE9F7','#E3F1E1','#F6DDE3','#EAE2F6','#F7EBD0','#DDF0EE','#F2E2D6'];
-const AV_DEFAULT={gender:'M',hair:1,face:0,skin:2,eyeColor:0,eyeShape:0,nose:0,mouth:0};
+const AV_DEFAULT={gender:'M',hair:0,hairColor:1,face:0,skin:2,eyeColor:0,eyeShape:0,nose:0,mouth:0};
 
 const AV_FACE=[
   s=>`<ellipse cx="60" cy="64" rx="34" ry="37" fill="${s}"/>`,
@@ -2333,17 +2333,30 @@ const AV_FACE=[
 const AV_HAIR_LONG_BACK=c=>`<path d="M22 60C20 26 40 14 60 14C80 14 100 26 98 60L100 112L80 112L80 60L40 60L40 112L20 112Z" fill="${c}"/>`;
 const AV_HAIR_SHORT_FRONT=c=>`<path d="M26 58C24 30 40 18 60 18C80 18 96 30 94 58C88 42 76 34 60 34C44 34 32 42 26 58Z" fill="${c}"/>`;
 const AV_HAIR_M=[
-  c=>['',''],                                                     /* 민머리 */
-  c=>['',AV_HAIR_SHORT_FRONT(c)],                                 /* 짧은 머리 */
-  c=>['',`<path d="M26 60C22 28 42 16 62 16C84 16 98 30 94 60C90 46 84 38 74 34C62 42 44 44 30 46C28 50 27 55 26 60Z" fill="${c}"/>`], /* 가르마 */
-  c=>['',`<path d="M28 50C30 28 44 21 60 21C76 21 90 28 92 50C84 37 72 31 60 31C48 31 36 37 28 50Z" fill="${c}" opacity=".85"/>`],     /* 반삭 */
-  c=>['',`<path d="M30 48C32 30 44 24 60 24C76 24 88 30 90 48C82 38 72 34 60 34C48 34 38 38 30 48Z" fill="${c}" opacity=".35"/><path d="M51 34L54 6L60 22L66 6L69 34C66 38 54 38 51 34Z" fill="${c}"/>`], /* 모히칸 */
-  c=>['',[[29,48],[34,34],[45,24],[60,19],[75,24],[86,34],[91,48]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="12" fill="${c}"/>`).join('')], /* 곱슬 */
-  c=>['',`<path d="M26 56C26 34 34 24 40 22L38 10L48 19L52 6L60 17L68 6L72 19L82 10L80 22C88 26 94 36 94 56C88 42 76 34 60 34C44 34 32 42 26 56Z" fill="${c}"/>`], /* 뾰족 */
-  c=>['',`<path d="M28 54C26 30 42 18 60 18C78 18 94 30 92 54C90 44 86 36 80 32C70 28 50 28 40 32C34 36 30 44 28 54Z" fill="${c}"/><path d="M44 24Q60 20 76 24M42 29Q60 25 78 29" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1.5"/>`], /* 올백 */
-  c=>['',`<path d="M28 54C26 34 36 24 46 20C50 10 70 6 82 14C92 20 96 34 92 54C86 40 74 32 60 32C46 32 34 40 28 54Z" fill="${c}"/>`], /* 포마드 */
-  c=>[`<path d="M24 70C18 40 34 16 60 16C86 16 102 40 96 70L92 70L92 50L28 50L28 70Z" fill="${c}"/>`,
-      `<path d="M26 54C28 30 44 20 60 20C76 20 92 30 94 54C86 44 78 38 70 40C64 34 56 34 50 40C42 38 32 44 26 54Z" fill="${c}"/>`]  /* 중간 웨이브 */
+  /* 댄디컷: 앞머리를 눈썹 위까지 내린 둥근 모양 */
+  c=>['',`<path d="M25 60C21 28 40 13 60 13C80 13 99 28 95 60C93 52 92 47 90 46L86 48L81 45L75 48L69 45L63 48L57 45L51 48L45 45L39 48L34 46C30 47 27 52 25 60Z" fill="${c}"/>`],
+  /* 투블럭: 옆머리는 짧게(옅게), 윗머리는 두껍게 */
+  c=>[`<path d="M25 40L25 66L31 62L32 40Z" fill="${c}" opacity=".45"/><path d="M95 40L95 66L89 62L88 40Z" fill="${c}" opacity=".45"/>`,
+      `<path d="M27 46C24 22 42 11 60 11C78 11 96 22 93 46C88 44 82 42 76 44C70 40 64 40 58 43C50 40 42 42 36 45C32 44 29 44 27 46Z" fill="${c}"/>`],
+  /* 가르마펌(6:4): 이마가 보이게 갈라 넘긴 볼륨 */
+  c=>['',`<path d="M24 60C20 30 37 13 58 13C82 13 100 28 96 60C94 49 89 41 81 37C75 41 68 40 63 33C57 41 45 45 35 43C30 47 26 53 24 60Z" fill="${c}"/><path d="M63 33Q61 24 64 16" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/>`],
+  /* 애즈펌: 가운데서 갈라 양옆으로 둥글게 말린 앞머리 */
+  c=>['',`<path d="M24 58C21 28 40 13 60 13C80 13 99 28 96 58C93 50 88 45 81 43C73 42 66 38 61 31C56 38 49 42 41 43C33 44 27 50 24 58Z" fill="${c}"/><path d="M42 41C34 43 31 50 35 55C35 49 39 46 46 45Z" fill="${c}"/><path d="M78 41C86 43 89 50 85 55C85 49 81 46 74 45Z" fill="${c}"/>`],
+  /* 쉼표머리: 한쪽 앞머리가 쉼표처럼 말림 */
+  c=>['',`<path d="M24 60C20 30 37 13 58 13C82 13 100 28 96 60C94 49 89 41 81 37C75 40 68 39 62 34C55 40 46 43 38 43C31 46 27 52 24 60Z" fill="${c}"/><path d="M47 40C36 41 31 49 35 56C37 51 40 47 47 46C44 50 44 54 47 56C52 50 52 44 47 40Z" fill="${c}"/>`],
+  /* 리젠트컷: 이마를 드러내고 앞머리를 위·뒤로 세움 */
+  c=>[`<path d="M25 42L25 64L31 60L31 42Z" fill="${c}" opacity=".5"/><path d="M95 42L95 64L89 60L89 42Z" fill="${c}" opacity=".5"/>`,
+      `<path d="M28 50C26 30 34 20 44 16C54 7 76 7 86 16C94 22 96 36 93 50C90 42 86 36 80 33C70 27 54 27 44 30C36 34 31 41 28 50Z" fill="${c}"/><path d="M48 22Q62 14 80 20M46 27Q62 20 82 25" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1.4"/>`],
+  /* 아이비리그컷: 짧고 단정한 옆가르마 */
+  c=>['',`<path d="M27 54C25 30 42 17 60 17C78 17 95 30 93 54C91 45 87 39 81 35C73 36 62 34 52 29C43 32 33 41 27 54Z" fill="${c}"/><path d="M52 29Q56 22 66 18" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.4"/>`],
+  /* 크롭컷: 짧은 윗머리 + 일자로 짧게 자른 앞머리 */
+  c=>['',`<path d="M27 53C25 27 42 16 60 16C78 16 95 27 93 53C91 46 89 42 87 41L84 39L78 41L72 39L66 41L60 39L54 41L48 39L42 41L36 39L33 41C30 43 28 47 27 53Z" fill="${c}"/><path d="M40 26L42 32M52 22L53 29M64 22L64 29M76 25L75 31" stroke="rgba(255,255,255,.18)" stroke-width="1.3" stroke-linecap="round"/>`],
+  /* 시스루댄디: 이마가 살짝 비치는 가닥 앞머리 */
+  c=>['',`<path d="M25 58C21 28 40 13 60 13C80 13 99 28 95 58C93 48 91 41 88 38L32 38C29 41 27 48 25 58Z" fill="${c}"/>`
+      +[34,40,46,52,58,64,70,76,82,87].map(x=>`<path d="M${x} 36Q${x+1.5} 43 ${x-1} 48" fill="none" stroke="${c}" stroke-width="2.6" stroke-linecap="round"/>`).join('')],
+  /* 울프컷(히피펌): 귀를 덮는 길이에 웨이브, 뒷머리 살짝 김 */
+  c=>[`<path d="M22 70C16 40 32 14 60 14C88 14 104 40 98 70C97 80 93 87 88 90L89 60L31 60L32 90C27 87 23 80 22 70Z" fill="${c}"/>`,
+      `<path d="M25 58C25 30 42 17 60 17C78 17 95 30 95 58C91 49 85 45 78 47C74 40 67 40 62 44C56 40 48 40 43 46C36 44 29 49 25 58Z" fill="${c}"/>`]
 ];
 const AV_HAIR_F=[
   c=>[AV_HAIR_LONG_BACK(c),`<path d="M26 56C26 30 42 20 60 20C78 20 94 30 94 56C86 40 74 32 60 32C46 32 34 40 26 56Z" fill="${c}"/>`], /* 긴 생머리 */
@@ -2403,7 +2416,7 @@ const AV_MOUTH=[
 
 function avatarSVG(av,size,bgSeed){
   const a=Object.assign({},AV_DEFAULT,av||{});
-  const skin=AV_SKIN[a.skin]||AV_SKIN[2], eye=AV_EYE[a.eyeColor]||AV_EYE[0], hc=AV_HAIR_COLOR;
+  const skin=AV_SKIN[a.skin]||AV_SKIN[2], eye=AV_EYE[a.eyeColor]||AV_EYE[0], hc=AV_HAIR_COLORS[a.hairColor]||AV_HAIR_COLORS[1];
   const HAIRS=a.gender==='F'?AV_HAIR_F:AV_HAIR_M;
   const [hairBack,hairFront]=(HAIRS[a.hair]||HAIRS[0])(hc);
   let seed=0; String(bgSeed||'').split('').forEach(ch=>seed=(seed*31+ch.charCodeAt(0))>>>0);
@@ -2496,7 +2509,7 @@ function closeAvatarEditor(){ document.getElementById('av-modal').classList.remo
 
 function setAvPart(key,i){ avEdit.av[key]=i; renderAvatarEditor(); }
 function setAvGender(g){ avEdit.av.gender=g; renderAvatarEditor(); }
-function randomAvatar(){ AV_PARTS.forEach(p=>{ if(p.key!=='gender') avEdit.av[p.key]=Math.floor(Math.random()*10); }); renderAvatarEditor(); }
+function randomAvatar(){ AV_PARTS.forEach(p=>{ if(p.key!=='gender') avEdit.av[p.key]=Math.floor(Math.random()*(p.n||10)); }); renderAvatarEditor(); }
 
 function renderAvatarEditor(){
   const seed=avEdit.id||'new';
@@ -2504,15 +2517,16 @@ function renderAvatarEditor(){
   document.getElementById('av-parts').innerHTML=AV_PARTS.map(part=>{
     if(part.key==='gender') return `<div class="av-part"><div class="av-part-label">성별</div><div class="g-seg">`
       +[['M','👨 남성'],['F','👩 여성']].map(([g,l])=>`<button class="tab-btn${avEdit.av.gender===g?' active':''}" onclick="setAvGender('${g}')">${l}</button>`).join('')+`</div></div>`;
-    const opts=Array.from({length:10},(_,i)=>{
+    const opts=Array.from({length:part.n||10},(_,i)=>{
       const on=avEdit.av[part.key]===i?' on':'';
       let inner;
-      if(part.key==='skin') inner=`<span class="av-sw" style="background:${AV_SKIN[i]}"></span>`;
+      if(part.key==='hairColor') inner=`<span class="av-sw" style="background:${AV_HAIR_COLORS[i]}"></span>`;
+      else if(part.key==='skin') inner=`<span class="av-sw" style="background:${AV_SKIN[i]}"></span>`;
       else if(part.key==='eyeColor') inner=`<span class="av-sw" style="background:${AV_EYE[i]}"></span>`;
       else inner=avatarSVG(Object.assign({},avEdit.av,{[part.key]:i}),38,seed);
       return `<button class="av-opt${on}" title="${part.label} ${i+1}" onclick="setAvPart('${part.key}',${i})">${inner}</button>`;
     }).join('');
-    return `<div class="av-part"><div class="av-part-label">${part.label}</div><div class="av-opts">${opts}</div></div>`;
+    return `<div class="av-part"><div class="av-part-label">${part.label}</div><div class="av-opts" style="grid-template-columns:repeat(${part.n||10},1fr)">${opts}</div></div>`;
   }).join('');
 }
 
