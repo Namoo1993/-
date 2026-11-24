@@ -2650,6 +2650,8 @@ window.addEventListener('message',e=>{
   if(d.type==='DONE') finishIconRun(d.result);
 });
 function pingIconExt(){ window.postMessage({source:'rate-input',type:'PING'},'*'); }
+/* 확장 프로그램이 늦게 붙는 경우를 위해 연결될 때까지 3초마다 다시 확인 */
+setInterval(()=>{ if(!iconExt.ready&&document.getElementById('tab-rate')?.classList.contains('active')) pingIconExt(); },3000);
 function addIconLog(text,level){
   iconRunLog.push({text,level}); if(iconRunLog.length>400) iconRunLog.shift();
   const box=document.getElementById('rf-log');
