@@ -248,6 +248,9 @@ table.lane-tbl{min-width:0;table-layout:auto;font-size:12px}
 .g-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:10px 16px;margin-bottom:12px;font-size:13px;color:var(--green)}
 .g-banner b{font-weight:700}
 .g-banner .g-chip{font-size:11px;background:#fff;border:1px solid var(--green-bd);border-radius:10px;padding:1px 8px;color:var(--text2)}
+.g-spin{display:inline-block;width:10px;height:10px;border:2px solid var(--green-bd);border-top-color:var(--green);border-radius:50%;animation:gspin .8s linear infinite;margin-right:6px;vertical-align:-1px}
+@keyframes gspin{to{transform:rotate(360deg)}}
+.g-banner .g-chip.g-pending{background:#fff8e6;border-color:#e8c47a;color:#7a4800}
 .g-empty{background:var(--surface);border:1px dashed var(--border2);border-radius:var(--r);padding:48px 20px;text-align:center;color:var(--text3);font-size:13px;line-height:1.8}
 @media(max-width:1100px){.guide-wrap{grid-template-columns:1fr}.guide-left{position:static;max-height:none}}
 </style>
@@ -1911,6 +1914,7 @@ async function openGuide(){
 }
 
 async function loadGuideData(){
+  document.getElementById('g-info').innerHTML='<span class="g-spin"></span>데이터 불러오는 중…';
   try{
     const data=await sbGet('guide_rates','?select=*&order=id');
     guideData={}; data.forEach(r=>guideData[r.id]=r);
@@ -2074,18 +2078,38 @@ function loadGuideLane(i,port){
     surNote='';
   }else{
     guideAllowedSur(sec,lane).forEach(n=>
-      newRows.push({name:n,cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:'금액 입력'}));
-    surNote='Surcharge 금액 없음 — PC에서 guide-surcharge\run_guide_surcharge.bat 을 실행하면 ebiz 금액이 채워집니다';
+      newRows.push({name:n,cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:''}));
+    surNote='<span class="g-spin"></span>Surcharge 데이터 업데이트 중… (완료되면 자동으로 채워집니다)';
+    watchGuideSur(guideYm);
   }
   rows=newRows;
   const ban=document.getElementById('g-banner');
   ban.style.display='flex';
   ban.innerHTML=`<b>${esc(lane.pol.replace(/\n/g,' '))} → ${esc(lane.pod.replace(/\n/g,' '))}</b>`
-    +portBtns+(surNote?`<span class="g-chip">${surNote}</span>`:'');
+    +portBtns+(surNote?`<span class="g-chip g-pending">${surNote}</span>`:'');
   document.getElementById('g-empty').style.display='none';
   document.getElementById('pane-calc').style.display='block';
   render();
   renderGuideLanes();
+}
+
+/* Surcharge가 아직 없는 달은 15초마다 다시 확인하고, 들어오면 보고 있던 구간을 자동으로 다시 채운다 */
+let guideSurTimer=null, guideSurWatchYm='';
+function watchGuideSur(ym){
+  if(guideSurTimer&&guideSurWatchYm===ym) return;
+  clearInterval(guideSurTimer); guideSurWatchYm=ym;
+  guideSurTimer=setInterval(async()=>{
+    try{
+      const r=await sbGet('guide_surcharges',`?id=eq.${ym}&select=*`);
+      if(!r.length) return;
+      guideSur[ym]=r[0];
+      clearInterval(guideSurTimer); guideSurTimer=null; guideSurWatchYm='';
+      if(guideYm===ym&&guideLane!=null&&document.getElementById('g-banner').style.display!=='none'){
+        loadGuideLane(guideLane,guidePort);
+        showToast('Surcharge 데이터 업데이트 완료');
+      }
+    }catch(e){}
+  },15000);
 }
 
 function hideGuideQuote(){
