@@ -396,7 +396,6 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
             </div>
           </div>
           <div class="lane-wrap"><table class="lane-tbl" id="g-lanes"></table></div>
-          <div class="g-remark" id="g-remark"></div>
         </div>
       </div>
       <div id="guide-right">
@@ -1961,7 +1960,10 @@ function renderGuideCal(){
   const info=document.getElementById('g-info');
   const g=guideData[guideYm];
   if(g){
-    info.textContent='';
+    if(guideSurPending(guideYm)){
+      info.innerHTML='<span class="g-spin"></span>Surcharge 데이터 업데이트 중…';
+      watchGuideSur(guideYm);
+    }else info.textContent='';
   }else if(guideLoaded){
     info.textContent=Object.keys(guideData).length?'GUIDE가 있는 월(진하게 표시)을 고르세요.':'아직 올라온 GUIDE가 없습니다. 아래 버튼으로 엑셀을 올려 주세요.';
   }
@@ -2007,8 +2009,8 @@ function renderGuideLanes(){
     `<button class="tab-btn${c===guideCtry?' active':''}" ${secs.includes(c)?`onclick="setGuideCtry('${c}')"`:'disabled style="opacity:.4;cursor:not-allowed"'}>${c}</button>`).join('');
   document.getElementById('g-dry').className='tab-btn'+(guideType==='DRY'?' active':'');
   document.getElementById('g-rf').className='tab-btn'+(guideType==='RF'?' active':'');
-  const sec=curGuideSection(), tbl=document.getElementById('g-lanes'), rm=document.getElementById('g-remark');
-  if(!sec){ tbl.innerHTML='<tbody><tr><td style="padding:20px;text-align:center;color:var(--text3)">이 달 GUIDE에 '+esc(guideCtry)+' 구간이 없습니다</td></tr></tbody>'; rm.textContent=''; return; }
+  const sec=curGuideSection(), tbl=document.getElementById('g-lanes');
+  if(!sec){ tbl.innerHTML='<tbody><tr><td style="padding:20px;text-align:center;color:var(--text3)">이 달 GUIDE에 '+esc(guideCtry)+' 구간이 없습니다</td></tr></tbody>'; return; }
   const o=guideType==='RF'?2:0;
   let h=`<thead><tr><th>POL</th><th>POD</th><th>${esc(sec.cols[o]||'20')}</th><th>${esc(sec.cols[o+1]||'40')}</th></tr></thead><tbody>`;
   sec.rows.forEach((l,i)=>{
@@ -2022,8 +2024,6 @@ function renderGuideLanes(){
       +`<td class="num" ${click}>${n(l.r[o])}</td><td class="num" ${click}>${n(l.r[o+1])}</td></tr>`;
   });
   tbl.innerHTML=h+'</tbody>';
-  const rem=[...new Set(sec.rows.map(l=>l.remark).filter(Boolean))];
-  rm.textContent=rem.join('\n');
 }
 
 function splitSurNames(s){
@@ -2054,7 +2054,7 @@ function loadGuideLane(i,port){
   const newRows=[{name:'O/F',cur:'USD',p20:rt.p20||0,q20:0,p40:rt.p40||0,q40:0,basis:'CTN',price:0,
     memo:`GUIDE ${ymLabel} ${guideType} (${rt.h20}/${rt.h40})`}];
   const key=`${sec.name}|${lane.pol}|${lane.pod}`;
-  const sur=guideSur[guideYm]&&guideSur[guideYm].data&&guideSur[guideYm].data.lanes&&guideSur[guideYm].data.lanes[key];
+  const sur=!guideSurPending(guideYm)&&guideSur[guideYm]&&guideSur[guideYm].data&&guideSur[guideYm].data.lanes&&guideSur[guideYm].data.lanes[key];
   let surNote, portBtns='';
   const pods=(sur&&sur.pods)||[];
   if(!pods.includes(guidePort)) guidePort=pods[0]||'';
@@ -2093,6 +2093,14 @@ function loadGuideLane(i,port){
   renderGuideLanes();
 }
 
+/* 그 달 Surcharge가 없거나, GUIDE를 Surcharge보다 나중에 다시 올렸으면 '업데이트 중' */
+function guideSurPending(ym){
+  const g=guideData[ym], s=guideSur[ym];
+  if(!g) return false;
+  if(!s) return true;
+  return !!(g.updated_at&&s.updated_at&&new Date(g.updated_at)>new Date(s.updated_at));
+}
+
 /* Surcharge가 아직 없는 달은 15초마다 다시 확인하고, 들어오면 보고 있던 구간을 자동으로 다시 채운다 */
 let guideSurTimer=null, guideSurWatchYm='';
 function watchGuideSur(ym){
@@ -2103,6 +2111,8 @@ function watchGuideSur(ym){
       const r=await sbGet('guide_surcharges',`?id=eq.${ym}&select=*`);
       if(!r.length) return;
       guideSur[ym]=r[0];
+      if(guideSurPending(ym)) return;
+      if(guideYm===ym) renderGuideCal();
       clearInterval(guideSurTimer); guideSurTimer=null; guideSurWatchYm='';
       if(guideYm===ym&&guideLane!=null&&document.getElementById('g-banner').style.display!=='none'){
         loadGuideLane(guideLane,guidePort);
