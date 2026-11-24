@@ -2058,15 +2058,19 @@ function loadGuideLane(i,port){
   if(pods.length>1) portBtns='<span class="g-seg">'+pods.map(c=>`<button class="tab-btn${c===guidePort?' active':''}" style="padding:3px 10px;font-size:11px" onclick="loadGuideLane(${i},'${c}')">${PORT_KO[c]||c}</button>`).join('')+'</span>';
   if(Array.isArray(surRows)&&surRows.length){
     const allowed=guideAllowedSur(sec,lane);
+    /* ebiz 항목은 행을 모두 남긴다. 금액은 기본 부대비용과 엑셀에 적힌 Surcharge만 넣고 나머지는 0 */
     surRows.forEach(r=>{
-      if(!GUIDE_BASE_CHG.includes(r.name)&&!allowed.has(r.name)) return;
+      const use=GUIDE_BASE_CHG.includes(r.name)||allowed.has(r.name);
       const v=(guideType==='RF'?r.rf:r.dry)||{};
-      const p20=+v.p20||0, p40=+v.p40||0, bl=+v.bl||0;
-      if(!p20&&!p40&&!bl) return;              /* 이 컨테이너 종류에 없는 항목 */
-      const isBL=!p20&&!p40;
-      newRows.push({name:r.name,cur:r.cur||'USD',p20:isBL?0:p20,q20:0,p40:isBL?0:p40,q40:0,
-        basis:isBL?'BL':'CTN',price:isBL?bl:0,memo:''});
+      const anyCtn=[r.dry,r.rf].some(x=>x&&(+x.p20||+x.p40)), anyBl=[r.dry,r.rf].some(x=>x&&+x.bl);
+      const isBL=!anyCtn&&anyBl;
+      newRows.push({name:r.name,cur:r.cur||'USD',
+        p20:use&&!isBL?(+v.p20||0):0,q20:0,p40:use&&!isBL?(+v.p40||0):0,q40:0,
+        basis:isBL?'BL':'CTN',price:use&&isBL?(+v.bl||0):0,memo:''});
     });
+    /* 엑셀에 적혔지만 ebiz에 없는 Surcharge도 0원 행으로 둔다 */
+    allowed.forEach(n=>{ if(!surRows.some(r=>r.name===n))
+      newRows.push({name:n,cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:''}); });
     surNote='';
   }else{
     guideAllowedSur(sec,lane).forEach(n=>
