@@ -2038,9 +2038,15 @@ function loadGuideLane(i){
   const sur=guideSur[guideYm]&&guideSur[guideYm].data&&guideSur[guideYm].data.lanes&&guideSur[guideYm].data.lanes[key];
   let surNote;
   if(sur&&Array.isArray(sur.rows)&&sur.rows.length){
-    sur.rows.forEach(r=>newRows.push({name:r.name,cur:r.cur||'USD',p20:+r.p20||0,q20:0,p40:+r.p40||0,q40:0,
-      basis:r.basis==='BL'?'BL':'CTN',price:+r.price||0,memo:r.memo||'ebiz'}));
-    surNote=`Surcharge: ebiz ${esc(sur.date||'')}`;
+    sur.rows.forEach(r=>{
+      const v=(guideType==='RF'?r.rf:r.dry)||{};
+      const p20=+v.p20||0, p40=+v.p40||0, bl=+v.bl||0;
+      if(!p20&&!p40&&!bl) return;              /* 이 컨테이너 종류에 없는 항목 */
+      const isBL=!p20&&!p40;
+      newRows.push({name:r.name,cur:r.cur||'USD',p20:isBL?0:p20,q20:0,p40:isBL?0:p40,q40:0,
+        basis:isBL?'BL':'CTN',price:isBL?bl:0,memo:''});
+    });
+    surNote=`Surcharge: ebiz ${esc(sur.date||'')} 기준 (${esc(sur.pol)}→${esc(sur.pod)})`;
   }else{
     const seen=new Set();
     [['POL',lane.polSur],['POD',lane.podSur]].forEach(([side,s])=>splitSurNames(s).forEach(n=>{
