@@ -2060,7 +2060,7 @@ function loadGuideLane(i,port){
       if(seen.has(n)) return; seen.add(n);
       newRows.push({name:n,cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:`${side} Surcharge (금액 입력)`});
     }));
-    surNote='Surcharge 금액 미입력 (ebiz 데이터 없음)';
+    surNote='Surcharge 금액 없음 — PC에서 guide-surcharge\run_guide_surcharge.bat 을 실행하면 ebiz 금액이 채워집니다';
   }
   rows=newRows;
   const ban=document.getElementById('g-banner');
