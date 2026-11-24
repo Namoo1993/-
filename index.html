@@ -253,6 +253,38 @@ table.lane-tbl{min-width:0;table-layout:auto;font-size:12px}
 .g-banner .g-chip.g-pending{background:#fff8e6;border-color:#e8c47a;color:#7a4800}
 .g-empty{background:var(--surface);border:1px dashed var(--border2);border-radius:var(--r);padding:48px 20px;text-align:center;color:var(--text3);font-size:13px;line-height:1.8}
 @media(max-width:1100px){.guide-wrap{grid-template-columns:1fr}.guide-left{position:static;max-height:none}}
+/* ── RATE INPUT ── */
+.rate-wrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px;align-items:start}
+.rate-left{position:sticky;top:112px;display:flex;flex-direction:column;gap:12px}
+.rate-add-btn{width:100%;height:42px;border:none;border-radius:var(--r-sm);background:var(--text);color:#fff;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:600;cursor:pointer}
+.rate-add-btn:hover{background:#333}
+.rate-side-item{width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;border:1px solid transparent;border-radius:var(--r-sm);background:transparent;cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text2);text-align:left}
+.rate-side-item:hover{background:var(--surface2)}
+.rate-side-item.on{background:var(--green-bg);border-color:var(--green-bd);color:var(--green);font-weight:600}
+.rate-side-item svg{flex-shrink:0;border-radius:50%}
+.rate-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.rate-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 12px 14px;text-align:center;cursor:pointer;box-shadow:var(--shadow);transition:all .12s}
+.rate-card:hover{border-color:var(--text3);transform:translateY(-2px)}
+.rate-card.add{border-style:dashed;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:168px;box-shadow:none;background:transparent}
+.rate-av{display:flex;justify-content:center;margin-bottom:10px}
+.rate-av svg,.rate-folder-av svg{border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.rate-plus{width:64px;height:64px;border-radius:50%;border:1.5px dashed var(--border2);display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--text3);margin-bottom:10px}
+.rate-name{font-size:14px;font-weight:600;word-break:break-all}
+.rate-sub{font-size:11px;color:var(--text3);margin-top:2px}
+.rate-folder-head{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;box-shadow:var(--shadow);margin-bottom:12px}
+.av-modal{width:820px;max-width:95vw;max-height:92vh;overflow:auto}
+.av-body{display:grid;grid-template-columns:190px 1fr;gap:20px}
+.av-preview{display:flex;justify-content:center;margin-bottom:12px}
+.av-preview svg{border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+.av-part{margin-bottom:10px}
+.av-part-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.04em;margin-bottom:5px}
+.av-opts{display:grid;grid-template-columns:repeat(10,1fr);gap:5px}
+.av-opt{aspect-ratio:1;border:1.5px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:2px;overflow:hidden}
+.av-opt:hover{border-color:var(--text3)}
+.av-opt.on{border-color:var(--text);box-shadow:0 0 0 2px rgba(24,22,15,.15)}
+.av-opt svg{width:100%;height:100%;border-radius:50%}
+.av-sw{width:70%;height:70%;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
+@media(max-width:900px){.rate-wrap{grid-template-columns:1fr}.rate-left{position:static}.av-body{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -349,6 +381,27 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
   </div>
 </div>
 
+<div class="modal-overlay" id="av-modal">
+  <div class="modal av-modal">
+    <h3 id="av-title">담당자 추가</h3>
+    <div class="av-body">
+      <div>
+        <div class="av-preview" id="av-preview"></div>
+        <div class="modal-field">
+          <label>이름</label>
+          <input id="av-name" maxlength="20" placeholder="예: 홍길동" oninput="avEdit.name=this.value" onkeydown="if(event.key==='Enter')saveAvatarEditor()">
+        </div>
+        <button class="modal-btn" style="width:100%" onclick="randomAvatar()">🎲 무작위로 만들기</button>
+      </div>
+      <div id="av-parts"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn" onclick="closeAvatarEditor()">취소</button>
+      <button class="modal-btn ok" onclick="saveAvatarEditor()">저장</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <header>
@@ -368,7 +421,31 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
     <button class="tab-btn" id="tab-side" onclick="switchTab('side')">⚖️ 나란히 비교</button>
     <button class="tab-btn" id="tab-history" onclick="switchTab('history')">📁 저장된 견적</button>
     <button class="tab-btn" id="tab-guide" onclick="switchTab('guide')">🧭 GUIDE 운임 계산기</button>
+    <button class="tab-btn" id="tab-rate" onclick="switchTab('rate')">📥 Rate Input</button>
     <button class="tab-btn" id="tab-compare" onclick="closeCompareTab()" style="display:none">📊 요약 비교: <span id="compare-title-label"></span> ✕</button>
+  </div>
+
+  <!-- RATE INPUT 탭 -->
+  <div id="pane-rate" style="display:none">
+    <div class="rate-wrap">
+      <div class="rate-left">
+        <div class="g-card">
+          <button class="rate-add-btn" onclick="openAvatarEditor()">👤 담당자 추가</button>
+          <div class="g-info" id="rate-count" style="margin-top:10px"></div>
+          <div id="rate-side-list" style="margin-top:6px;display:flex;flex-direction:column;gap:2px"></div>
+        </div>
+      </div>
+      <div>
+        <div id="rate-home">
+          <div class="g-title" style="margin-bottom:12px">영업사원별 폴더</div>
+          <div class="rate-grid" id="rate-grid"></div>
+        </div>
+        <div id="rate-folder" style="display:none">
+          <div class="rate-folder-head" id="rate-folder-head"></div>
+          <div class="g-empty">아직 첨부된 파일이 없습니다.</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- GUIDE 운임 계산기 탭 -->
@@ -861,6 +938,8 @@ function switchTab(tab){
   document.getElementById('pane-calc').style.display    = (tab==='calc'||(tab==='guide'&&guideLane)) ?'block':'none';
   document.getElementById('pane-guide').style.display   = tab==='guide'   ?'block':'none';
   document.getElementById('tab-guide').className  = 'tab-btn'+(tab==='guide' ?' active':'');
+  document.getElementById('pane-rate').style.display    = tab==='rate'    ?'block':'none';
+  document.getElementById('tab-rate').className   = 'tab-btn'+(tab==='rate'  ?' active':'');
   document.getElementById('pane-side').style.display    = tab==='side'    ?'block':'none';
   document.getElementById('pane-history').style.display = tab==='history' ?'block':'none';
   document.getElementById('pane-compare').style.display = tab==='compare' ?'block':'none';
@@ -869,7 +948,8 @@ function switchTab(tab){
   document.getElementById('tab-history').className = 'tab-btn'+(tab==='history' ?' active':'');
   document.getElementById('tab-compare').className = 'tab-btn'+(tab==='compare' ?' active':'');
   // 나란히 비교 탭이면 full width
-  document.body.classList.toggle('side-mode', tab==='side'||tab==='compare'||tab==='guide');
+  document.body.classList.toggle('side-mode', tab==='side'||tab==='compare'||tab==='guide'||tab==='rate');
+  if(tab==='rate')    openRate().catch(()=>{});
   if(tab==='guide')   openGuide();
   if(tab==='history') loadEstimates();
   if(tab==='compare') renderCompare();
@@ -2221,6 +2301,227 @@ async function onGuideFile(input){
     const msg=String(e.message||e);
     showToast(/guide_rates|does not exist|PGRST/.test(msg)?'Supabase에 guide_rates 표가 없습니다 (SQL 실행 필요)':'GUIDE 올리기 실패: '+msg);
   }
+}
+
+/* ══════════════════════════════════════════
+   RATE INPUT — 영업사원(담당자)별 폴더
+   rate_staff : id, name, avatar{hair,face,skin,eyeColor,eyeShape,nose,mouth}, created_at
+══════════════════════════════════════════ */
+const AV_PARTS=[
+  {key:'hair',label:'머리스타일'},{key:'face',label:'얼굴모양'},{key:'skin',label:'피부색'},
+  {key:'eyeColor',label:'눈색'},{key:'eyeShape',label:'눈모양'},{key:'nose',label:'코모양'},{key:'mouth',label:'입모양'}
+];
+const AV_SKIN=['#FDE7D6','#F9D9C0','#F3C7A6','#E9B48C','#DA9F76','#C68761','#AD704C','#8F593A','#6F432B','#4E2E1E'];
+const AV_EYE=['#3B2416','#6B4423','#1C1C1C','#2E6DB4','#4A9BE0','#3C8D5A','#7A8B99','#8E5BB5','#B07D2B','#2A9D8F'];
+const AV_HAIR_COLOR='#2B2118';
+const AV_BG=['#F4E3C9','#DDE9F7','#E3F1E1','#F6DDE3','#EAE2F6','#F7EBD0','#DDF0EE','#F2E2D6'];
+const AV_DEFAULT={hair:1,face:0,skin:2,eyeColor:0,eyeShape:0,nose:0,mouth:0};
+
+const AV_FACE=[
+  s=>`<ellipse cx="60" cy="64" rx="34" ry="37" fill="${s}"/>`,
+  s=>`<ellipse cx="60" cy="64" rx="30" ry="40" fill="${s}"/>`,
+  s=>`<ellipse cx="60" cy="66" rx="27" ry="42" fill="${s}"/>`,
+  s=>`<rect x="26" y="26" width="68" height="78" rx="18" fill="${s}"/>`,
+  s=>`<ellipse cx="60" cy="66" rx="38" ry="34" fill="${s}"/>`,
+  s=>`<path d="M60 104C40 96 26 80 26 56C26 36 42 26 60 30C78 26 94 36 94 56C94 80 80 96 60 104Z" fill="${s}"/>`,
+  s=>`<path d="M60 24C76 34 94 48 92 64C90 84 74 100 60 104C46 100 30 84 28 64C26 48 44 34 60 24Z" fill="${s}"/>`,
+  s=>`<path d="M60 26C80 26 88 40 90 56C94 80 84 102 60 104C36 102 26 80 30 56C32 40 40 26 60 26Z" fill="${s}"/>`,
+  s=>`<path d="M60 24C84 24 94 44 92 62C90 84 74 104 60 106C46 104 30 84 28 62C26 44 36 24 60 24Z" fill="${s}"/>`,
+  s=>`<path d="M30 40Q30 26 46 26L74 26Q90 26 90 40L90 78Q90 102 60 104Q30 102 30 78Z" fill="${s}"/>`
+];
+/* 머리: [뒤쪽(얼굴 뒤), 앞쪽(얼굴 위)] */
+const AV_HAIR=[
+  c=>['',''],
+  c=>['',`<path d="M26 58C24 30 40 18 60 18C80 18 96 30 94 58C88 42 76 34 60 34C44 34 32 42 26 58Z" fill="${c}"/>`],
+  c=>['',`<path d="M26 60C22 28 42 16 62 16C84 16 98 30 94 60C90 46 84 38 74 34C62 42 44 44 30 46C28 50 27 55 26 60Z" fill="${c}"/>`],
+  c=>['',`<path d="M28 50C30 28 44 21 60 21C76 21 90 28 92 50C84 37 72 31 60 31C48 31 36 37 28 50Z" fill="${c}" opacity=".85"/>`],
+  c=>[`<path d="M22 60C20 26 40 14 60 14C80 14 100 26 98 60L100 112L80 112L80 60L40 60L40 112L20 112Z" fill="${c}"/>`,
+      `<path d="M26 56C26 30 42 20 60 20C78 20 94 30 94 56C86 40 74 32 60 32C46 32 34 40 26 56Z" fill="${c}"/>`],
+  c=>[`<path d="M20 62C18 26 40 14 60 14C80 14 102 26 100 62L100 92Q96 98 88 96L88 60L32 60L32 96Q24 98 20 92Z" fill="${c}"/>`,
+      `<path d="M28 50C28 26 44 18 60 18C76 18 92 26 92 50Z" fill="${c}"/>`],
+  c=>[`<circle cx="94" cy="34" r="11" fill="${c}"/><path d="M98 40C114 52 110 82 98 94C101 74 99 58 90 46Z" fill="${c}"/>`,
+      `<path d="M26 58C24 30 40 18 60 18C80 18 96 30 94 58C88 42 76 34 60 34C44 34 32 42 26 58Z" fill="${c}"/>`],
+  c=>['',[[29,48],[34,34],[45,24],[60,19],[75,24],[86,34],[91,48]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="12" fill="${c}"/>`).join('')],
+  c=>['',`<path d="M30 48C32 30 44 24 60 24C76 24 88 30 90 48C82 38 72 34 60 34C48 34 38 38 30 48Z" fill="${c}" opacity=".35"/><path d="M51 34L54 6L60 22L66 6L69 34C66 38 54 38 51 34Z" fill="${c}"/>`],
+  c=>[`<circle cx="60" cy="13" r="12" fill="${c}"/>`,
+      `<path d="M27 56C25 30 41 20 60 20C79 20 95 30 93 56C87 41 75 33 60 33C45 33 33 41 27 56Z" fill="${c}"/>`]
+];
+/* 눈: 왼쪽 눈 기준(0,0)에 그리고 오른쪽은 좌우반전 */
+const AV_EYES=[
+  (c,s)=>`<circle r="6" fill="#fff"/><circle r="3.6" fill="${c}"/><circle r="1.6" fill="#111"/>`,
+  (c,s)=>`<ellipse rx="7.5" ry="5" fill="#fff"/><circle r="3.6" fill="${c}"/><circle r="1.6" fill="#111"/>`,
+  (c,s)=>`<circle r="3.2" fill="${c}"/><circle cx="1" cy="-1" r=".9" fill="#fff"/>`,
+  (c,s)=>`<path d="M-8 0Q0-6 8 0Q0 6-8 0Z" fill="#fff"/><circle r="3.2" fill="${c}"/><circle r="1.4" fill="#111"/>`,
+  (c,s)=>`<circle r="8" fill="#fff"/><circle cy="1" r="5" fill="${c}"/><circle cy="1" r="2.2" fill="#111"/><circle cx="1.8" cy="-1.5" r="1.4" fill="#fff"/>`,
+  (c,s)=>`<path d="M-6 2Q0-5 6 2" fill="none" stroke="${c}" stroke-width="2.6" stroke-linecap="round"/>`,
+  (c,s)=>`<ellipse rx="7" ry="5" fill="#fff"/><circle cy="1" r="3.4" fill="${c}"/><circle cy="1" r="1.5" fill="#111"/><path d="M-8 0Q0-7 8 0L8-6-8-6Z" fill="${s}"/><path d="M-7.5 0Q0-2.5 7.5 0" fill="none" stroke="#5a3a2a" stroke-width="1.2"/>`,
+  (c,s)=>`<path d="M-8 2Q-2-6 8-3Q2 5-8 2Z" fill="#fff"/><circle cy="-.5" r="3.1" fill="${c}"/><circle cy="-.5" r="1.4" fill="#111"/>`,
+  (c,s)=>`<path d="M-8-3Q2-6 8 2Q-2 5-8-3Z" fill="#fff"/><circle cy="-.5" r="3.1" fill="${c}"/><circle cy="-.5" r="1.4" fill="#111"/>`,
+  (c,s)=>`<circle r="6" fill="#fff"/><circle r="3.6" fill="${c}"/><circle r="1.6" fill="#111"/><path d="M-6-4L-8-7M-2-6L-3-9.5M2-6L3-9.5M6-4L8-7" stroke="#222" stroke-width="1.2" stroke-linecap="round"/>`
+];
+const AV_NOSE=[
+  ()=>`<circle cx="56.5" cy="74" r="1.4" fill="rgba(0,0,0,.35)"/><circle cx="63.5" cy="74" r="1.4" fill="rgba(0,0,0,.35)"/>`,
+  ()=>`<path d="M60 64L57.5 74L62 75" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
+  ()=>`<path d="M61 62L61 74L56 74" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
+  ()=>`<circle cx="60" cy="72" r="4.2" fill="rgba(0,0,0,.13)"/>`,
+  ()=>`<path d="M60 63L55 75L65 75Z" fill="rgba(0,0,0,.13)"/>`,
+  ()=>`<path d="M53 72Q60 79 67 72" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1.8" stroke-linecap="round"/>`,
+  ()=>`<path d="M58 62Q65 70 58 76" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1.8" stroke-linecap="round"/>`,
+  ()=>`<path d="M60 60L60 75M56 76Q60 79 64 76" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1.8" stroke-linecap="round"/>`,
+  ()=>`<path d="M56 69Q60 78 64 69" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1.8" stroke-linecap="round"/>`,
+  ()=>`<ellipse cx="60" cy="73" rx="6.5" ry="4.2" fill="rgba(0,0,0,.1)"/><circle cx="57.5" cy="74.5" r="1.2" fill="rgba(0,0,0,.35)"/><circle cx="62.5" cy="74.5" r="1.2" fill="rgba(0,0,0,.35)"/>`
+];
+const AV_LIP='#7a2e2e';
+const AV_MOUTH=[
+  ()=>`<path d="M50 84Q60 94 70 84" fill="none" stroke="${AV_LIP}" stroke-width="2.6" stroke-linecap="round"/>`,
+  ()=>`<path d="M48 82Q60 98 72 82Z" fill="${AV_LIP}"/><path d="M50 83L70 83Q68 87.5 60 87.5Q52 87.5 50 83Z" fill="#fff"/>`,
+  ()=>`<path d="M52 87L68 87" stroke="${AV_LIP}" stroke-width="2.6" stroke-linecap="round"/>`,
+  ()=>`<ellipse cx="60" cy="87" rx="4" ry="5" fill="${AV_LIP}"/>`,
+  ()=>`<path d="M50 87Q62 90 70 82" fill="none" stroke="${AV_LIP}" stroke-width="2.6" stroke-linecap="round"/>`,
+  ()=>`<path d="M48 82Q60 102 72 82Z" fill="${AV_LIP}"/><ellipse cx="60" cy="92" rx="6" ry="3.6" fill="#e07a7a"/>`,
+  ()=>`<path d="M55 85Q60 89 65 85" fill="none" stroke="${AV_LIP}" stroke-width="2.4" stroke-linecap="round"/>`,
+  ()=>`<path d="M50 84Q60 92 70 84" fill="none" stroke="${AV_LIP}" stroke-width="2.4" stroke-linecap="round"/><path d="M56.5 88Q60 96 63.5 88Z" fill="#e07a7a"/>`,
+  ()=>`<path d="M50 84Q55 90 60 84Q65 90 70 84" fill="none" stroke="${AV_LIP}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+  ()=>`<path d="M50 86Q55 81.5 60 84Q65 81.5 70 86Q60 94.5 50 86Z" fill="#c0606a"/>`
+];
+
+function avatarSVG(av,size,bgSeed){
+  const a=Object.assign({},AV_DEFAULT,av||{});
+  const skin=AV_SKIN[a.skin]||AV_SKIN[2], eye=AV_EYE[a.eyeColor]||AV_EYE[0], hc=AV_HAIR_COLOR;
+  const [hairBack,hairFront]=(AV_HAIR[a.hair]||AV_HAIR[1])(hc);
+  let seed=0; String(bgSeed||'').split('').forEach(ch=>seed=(seed*31+ch.charCodeAt(0))>>>0);
+  const bg=AV_BG[seed%AV_BG.length];
+  const eyeFn=AV_EYES[a.eyeShape]||AV_EYES[0];
+  const brow=`<path d="M-7-10Q0-13.5 7-10" fill="none" stroke="${hc}" stroke-width="2" stroke-linecap="round"/>`;
+  const shade=`rgba(0,0,0,.08)`;
+  return `<svg viewBox="0 0 120 120" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+    <defs><clipPath id="avc"><circle cx="60" cy="60" r="60"/></clipPath></defs>
+    <g clip-path="url(#avc)">
+      <rect width="120" height="120" fill="${bg}"/>
+      ${hairBack}
+      <path d="M40 104Q60 118 80 104L96 120L24 120Z" fill="${skin}"/><path d="M40 104Q60 118 80 104L96 120L24 120Z" fill="${shade}"/>
+      <ellipse cx="27" cy="66" rx="6" ry="8" fill="${skin}"/><ellipse cx="93" cy="66" rx="6" ry="8" fill="${skin}"/>
+      ${(AV_FACE[a.face]||AV_FACE[0])(skin)}
+      <g transform="translate(46 60)">${brow}${eyeFn(eye,skin)}</g>
+      <g transform="translate(74 60) scale(-1 1)">${brow}${eyeFn(eye,skin)}</g>
+      ${(AV_NOSE[a.nose]||AV_NOSE[0])()}
+      ${(AV_MOUTH[a.mouth]||AV_MOUTH[0])()}
+      ${hairFront}
+    </g></svg>`;
+}
+
+let rateStaff=[], rateLoaded=false, rateOpenId=null;
+let avEdit={id:null,name:'',av:{...AV_DEFAULT}};
+
+async function openRate(){
+  if(!rateLoaded) await loadRateStaff();
+  renderRate();
+}
+
+async function loadRateStaff(){
+  const grid=document.getElementById('rate-grid');
+  grid.innerHTML='<div class="g-empty" style="grid-column:1/-1"><span class="g-spin"></span>담당자 불러오는 중…</div>';
+  try{
+    rateStaff=await sbGet('rate_staff','?select=*&order=created_at');
+    rateLoaded=true;
+  }catch(e){
+    rateStaff=[];
+    const msg=String(e.message||e);
+    grid.innerHTML='<div class="g-empty" style="grid-column:1/-1;color:#c0392b">'
+      +(/rate_staff|does not exist|PGRST/.test(msg)?'Supabase에 rate_staff 표가 아직 없습니다. SQL을 먼저 실행해 주세요.':'담당자 불러오기 실패: '+esc(msg))+'</div>';
+    throw e;
+  }
+}
+
+function renderRate(){
+  document.getElementById('rate-count').textContent=rateStaff.length?`담당자 ${rateStaff.length}명`:'';
+  document.getElementById('rate-side-list').innerHTML=rateStaff.map(p=>
+    `<button class="rate-side-item${p.id===rateOpenId?' on':''}" onclick="openRateFolder('${p.id}')">${avatarSVG(p.avatar,28,p.id)}<span>${esc(p.name)}</span></button>`).join('');
+  const home=document.getElementById('rate-home'), folder=document.getElementById('rate-folder');
+  const p=rateStaff.find(x=>x.id===rateOpenId);
+  if(!p){
+    rateOpenId=null; home.style.display='block'; folder.style.display='none';
+    const grid=document.getElementById('rate-grid');
+    grid.innerHTML=rateStaff.length
+      ?rateStaff.map(p=>`<div class="rate-card" onclick="openRateFolder('${p.id}')">
+          <div class="rate-av">${avatarSVG(p.avatar,84,p.id)}</div>
+          <div class="rate-name">${esc(p.name)}</div>
+          <div class="rate-sub">파일 0개</div>
+        </div>`).join('')
+        +`<div class="rate-card add" onclick="openAvatarEditor()"><div class="rate-plus">＋</div><div class="rate-name" style="color:var(--text3);font-weight:500">담당자 추가</div></div>`
+      :`<div class="g-empty" style="grid-column:1/-1">아직 담당자가 없습니다.<br>왼쪽 <b>담당자 추가</b>로 영업사원을 등록하세요.</div>`;
+  }else{
+    home.style.display='none'; folder.style.display='block';
+    document.getElementById('rate-folder-head').innerHTML=
+      `<button class="tpl-btn" onclick="closeRateFolder()">← 전체 담당자</button>
+       <div class="rate-folder-av">${avatarSVG(p.avatar,56,p.id)}</div>
+       <div style="flex:1"><div style="font-size:17px;font-weight:700">${esc(p.name)}</div><div class="rate-sub">파일 0개</div></div>
+       <button class="tpl-btn warn" onclick="openAvatarEditor('${p.id}')">수정</button>
+       <button class="tpl-btn danger" onclick="deleteRateStaff('${p.id}')">삭제</button>`;
+  }
+}
+
+function openRateFolder(id){ rateOpenId=id; renderRate(); }
+function closeRateFolder(){ rateOpenId=null; renderRate(); }
+
+function openAvatarEditor(id){
+  const p=id&&rateStaff.find(x=>x.id===id);
+  avEdit=p?{id:p.id,name:p.name,av:Object.assign({},AV_DEFAULT,p.avatar)}
+          :{id:null,name:'',av:{...AV_DEFAULT,
+              hair:Math.floor(Math.random()*10),skin:Math.floor(Math.random()*6),mouth:Math.floor(Math.random()*10)}};
+  document.getElementById('av-title').textContent=p?'담당자 수정':'담당자 추가';
+  document.getElementById('av-name').value=avEdit.name;
+  renderAvatarEditor();
+  document.getElementById('av-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('av-name').focus(),50);
+}
+function closeAvatarEditor(){ document.getElementById('av-modal').classList.remove('show'); }
+
+function setAvPart(key,i){ avEdit.av[key]=i; renderAvatarEditor(); }
+function randomAvatar(){ AV_PARTS.forEach(p=>avEdit.av[p.key]=Math.floor(Math.random()*10)); renderAvatarEditor(); }
+
+function renderAvatarEditor(){
+  const seed=avEdit.id||'new';
+  document.getElementById('av-preview').innerHTML=avatarSVG(avEdit.av,150,seed);
+  document.getElementById('av-parts').innerHTML=AV_PARTS.map(part=>{
+    const opts=Array.from({length:10},(_,i)=>{
+      const on=avEdit.av[part.key]===i?' on':'';
+      let inner;
+      if(part.key==='skin') inner=`<span class="av-sw" style="background:${AV_SKIN[i]}"></span>`;
+      else if(part.key==='eyeColor') inner=`<span class="av-sw" style="background:${AV_EYE[i]}"></span>`;
+      else inner=avatarSVG(Object.assign({},avEdit.av,{[part.key]:i}),38,seed);
+      return `<button class="av-opt${on}" title="${part.label} ${i+1}" onclick="setAvPart('${part.key}',${i})">${inner}</button>`;
+    }).join('');
+    return `<div class="av-part"><div class="av-part-label">${part.label}</div><div class="av-opts">${opts}</div></div>`;
+  }).join('');
+}
+
+async function saveAvatarEditor(){
+  const name=document.getElementById('av-name').value.trim();
+  if(!name){ showToast('이름을 입력해 주세요'); document.getElementById('av-name').focus(); return; }
+  const isNew=!avEdit.id;
+  const id=avEdit.id||(crypto.randomUUID?crypto.randomUUID():'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,8));
+  const prev=rateStaff.find(x=>x.id===id);
+  const rec={id,name,avatar:{...avEdit.av},created_at:prev?prev.created_at:new Date().toISOString()};
+  try{
+    await sbUpsert('rate_staff',rec);
+    if(prev) Object.assign(prev,rec); else rateStaff.push(rec);
+    closeAvatarEditor(); renderRate();
+    showToast(isNew?`${name} 담당자를 추가했습니다`:`${name} 정보를 수정했습니다`);
+  }catch(e){
+    const msg=String(e.message||e);
+    showToast(/rate_staff|does not exist|PGRST/.test(msg)?'Supabase에 rate_staff 표가 없습니다 (SQL 실행 필요)':'저장 실패: '+msg);
+  }
+}
+
+async function deleteRateStaff(id){
+  const p=rateStaff.find(x=>x.id===id); if(!p) return;
+  if(!confirm(`${p.name} 담당자를 삭제할까요?`)) return;
+  try{
+    await sbDelete('rate_staff',id);
+    rateStaff=rateStaff.filter(x=>x.id!==id); rateOpenId=null; renderRate();
+    showToast(`${p.name} 담당자를 삭제했습니다`);
+  }catch(e){ showToast('삭제 실패: '+e.message); }
 }
 
 /* ══════════════════════════════════════════
