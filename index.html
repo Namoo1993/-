@@ -298,6 +298,8 @@ table.rf-tbl{min-width:760px;table-layout:auto;font-size:12.5px}
 .rf-mono{font-family:'JetBrains Mono',monospace;font-size:12px}
 .rf-name{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rf-month{border:1px solid var(--border2);border-radius:4px;padding:2px 4px;font-family:'Noto Sans KR',sans-serif;font-size:12px;background:var(--surface2)}
+.rf-tbl tr.rf-on td{background:var(--green-bg)}
+.rf-tbl input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--green)}
 .rf-st{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text3)}
 .rf-st.ok{background:var(--green-bg);border-color:var(--green-bd);color:var(--green)}
 .rf-st.ng{background:#fde8e8;border-color:#e8aaaa;color:#c0392b}
@@ -2461,7 +2463,9 @@ function avatarSVG(av,size,bgSeed){
    RATE INPUT — 담당자 폴더 파일 (rate_files 표 + Storage 'rate-files' 버킷)
 ══════════════════════════════════════════ */
 const RATE_BUCKET='rate-files';
-let rateFiles=[], rateMonth='', rateShipper='';
+let rateFiles=[], rateMonth='', rateShipper='', rateChecked=new Set(), rateDry=false;
+function toggleRateCheck(id,on){ if(on) rateChecked.add(id); else rateChecked.delete(id); renderRate(); }
+function toggleRateCheckAll(on){ const p=rateStaff.find(x=>x.id===rateOpenId); if(!p) return; rateVisibleFiles(p.id).forEach(f=>on?rateChecked.add(f.id):rateChecked.delete(f.id)); renderRate(); }
 let iconExt={ready:false,version:''}, iconRun=null;
 
 function stHeaders(extra){ return Object.assign({'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},extra||{}); }
@@ -2578,25 +2582,31 @@ function renderRateFolderBody(p){
       </select>
     </div>`;
 
-  const iconBar=rateMonth?`
+  const checked=list.filter(f=>rateChecked.has(f.id));
+  const lastDay=ym=>new Date(+ym.slice(0,4),+ym.slice(5),0).getDate();
+  const ckMonths=[...new Set(checked.map(f=>f.month).filter(Boolean))].sort();
+  const allOn=list.length&&list.every(f=>rateChecked.has(f.id));
+  const iconBar=list.length?`
     <div class="rf-icon">
       <div style="flex:1">
-        <b>${ymLabelK(rateMonth)} ICON 운임 입력</b>
-        <span class="rate-sub" style="margin-left:6px">${list.length}개 파일 · 유효기간 ${rateMonth}-01 ~ ${rateMonth}-${new Date(+rateMonth.slice(0,4),+rateMonth.slice(5),0).getDate()} · 기존 운임 유지</span>
-        <div class="rate-sub" id="rf-ext">${iconExt.ready?`🟢 ICON 확장 프로그램 연결됨 (v${esc(iconExt.version)})`:'⚪ ICON 확장 프로그램(v2.3) 연결 안 됨 — 확장 프로그램을 새로고침한 뒤 이 페이지도 새로고침하세요'}</div>
+        <b>ICON 운임 입력</b>
+        <span class="rate-sub" style="margin-left:6px">${checked.length
+          ?`체크한 화주 ${checked.length}개 · 유효기간 `+ckMonths.map(m=>`${m.slice(5)}/01~${m.slice(5)}/${lastDay(m)}`).join(', ')+' · 기존 운임 유지'
+          :'아래 표에서 ICON에 올릴 화주를 체크하세요'}</span>
+        <div class="rate-sub" id="rf-ext">${iconExt.ready?`🟢 ICON 확장 프로그램 연결됨 (v${esc(iconExt.version)})`:'⚪ ICON 확장 프로그램(v2.3) 연결 안 됨 — chrome://extensions 에서 확장 프로그램을 새로고침한 뒤 이 페이지도 새로고침하세요'}</div>
       </div>
-      <label class="rate-sub" style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="rf-dry"> 확인 모드(저장 안 함)</label>
+      <label class="rate-sub" style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="rf-dry"${rateDry?' checked':''} onchange="rateDry=this.checked"> 확인 모드(저장 안 함)</label>
       ${iconRun?`<button class="tpl-btn danger" onclick="stopIconRun()">중단</button>`
-               :`<button class="tpl-btn primary" ${list.length&&iconExt.ready?'':'disabled style="opacity:.45;cursor:not-allowed"'} onclick="startIconRun()">ICON 입력 시작</button>`}
+               :`<button class="tpl-btn primary" ${checked.length&&iconExt.ready?'':'disabled style="opacity:.45;cursor:not-allowed"'} onclick="startIconRun()">⬆ 선택한 화주 ICON 입력${checked.length?` (${checked.length})`:''}</button>`}
     </div>
-    <div class="rf-log" id="rf-log" style="${iconRun||(iconRunLog.length&&iconRunLogStaff===p.id)?'':'display:none'}">${iconRunLog.map(l=>`<div class="${l.level||''}">${esc(l.text)}</div>`).join('')}</div>`
-    :`<div class="rate-sub" style="margin:4px 0 10px">ICON에 입력하려면 위에서 월을 고르세요.</div>`;
+    <div class="rf-log" id="rf-log" style="${iconRun||(iconRunLog.length&&iconRunLogStaff===p.id)?'':'display:none'}">${iconRunLog.map(l=>`<div class="${l.level||''}">${esc(l.text)}</div>`).join('')}</div>`:'';
 
   const table=list.length?`
     <div class="tbl-wrap"><table class="rf-tbl">
-      <thead><tr><th>화주</th><th>AS번호</th><th>적용 월</th><th>파일명</th><th>올린 날짜</th><th>ICON</th><th></th></tr></thead>
-      <tbody>${list.map(f=>`<tr>
-        <td class="rf-ship">${esc(f.shipper)}</td>
+      <thead><tr><th style="width:34px;text-align:center"><input type="checkbox" title="전체 선택" ${allOn?'checked':''} onchange="toggleRateCheckAll(this.checked)"></th><th>화주</th><th>AS번호</th><th>적용 월</th><th>파일명</th><th>올린 날짜</th><th>ICON</th><th></th></tr></thead>
+      <tbody>${list.map(f=>`<tr class="${rateChecked.has(f.id)?'rf-on':''}">
+        <td style="text-align:center"><input type="checkbox" ${rateChecked.has(f.id)?'checked':''} onchange="toggleRateCheck('${f.id}',this.checked)"></td>
+        <td class="rf-ship" style="cursor:pointer" onclick="toggleRateCheck('${f.id}',!rateChecked.has('${f.id}'))">${esc(f.shipper)}</td>
         <td class="rf-mono">${esc(f.as_no||'—')}</td>
         <td><input type="month" class="rf-month" value="${esc(f.month||'')}" onchange="changeRateFileMonth('${f.id}',this.value)"></td>
         <td class="rf-name" title="${esc(f.file_name)}">${esc(f.file_name)} <span class="rate-sub">${fmtSize(f.size||0)}</span></td>
@@ -2649,19 +2659,22 @@ function blobToBase64(blob){
   return new Promise((ok,ng)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(',')[1]); r.onerror=ng; r.readAsDataURL(blob); });
 }
 async function startIconRun(){
-  const p=rateStaff.find(x=>x.id===rateOpenId); if(!p||!rateMonth) return;
-  const list=rateVisibleFiles(p.id);
-  if(!list.length) return;
-  const dry=document.getElementById('rf-dry')?.checked;
-  if(!confirm(`${p.name} · ${ymLabelK(rateMonth)} 파일 ${list.length}개를 ICON에 입력할까요?\n유효기간 ${rateMonth} 한 달, 기존 운임은 지우지 않습니다.`+(dry?'\n(확인 모드: 저장하지 않음)':''))) return;
+  const p=rateStaff.find(x=>x.id===rateOpenId); if(!p) return;
+  const list=rateVisibleFiles(p.id).filter(f=>rateChecked.has(f.id));
+  if(!list.length){ showToast('ICON에 올릴 화주를 체크하세요'); return; }
+  const noMonth=list.filter(f=>!f.month);
+  if(noMonth.length){ showToast('적용 월이 없는 파일이 있습니다: '+noMonth.map(f=>f.shipper).join(', ')); return; }
+  const dry=rateDry;
+  const names=list.map(f=>`· ${f.shipper} (${ymLabelK(f.month)})`).join('\n');
+  if(!confirm(`${p.name} 담당 화주 ${list.length}개를 ICON에 입력할까요?\n${names}\n\n각 파일의 적용 월 1일~말일로 입력하고, 기존 운임은 지우지 않습니다.`+(dry?'\n(확인 모드: 저장하지 않음)':''))) return;
   iconRunLog=[]; iconRunLogStaff=p.id;
-  iconRun={staff:p.id,month:rateMonth,files:list.map(f=>f.id),dry:!!dry};
+  iconRun={staff:p.id,files:list.map(f=>f.id),dry:!!dry};
   renderRate();
   addIconLog(`파일 ${list.length}개 준비 중…`,'info');
   try{
     const files=[];
-    for(const f of list){ files.push({name:f.file_name,data:await blobToBase64(await stGet(f.path))}); }
-    window.postMessage({source:'rate-input',type:'RUN',month:rateMonth,dryRun:!!dry,files},'*');
+    for(const f of list){ files.push({name:f.file_name,month:f.month,data:await blobToBase64(await stGet(f.path))}); }
+    window.postMessage({source:'rate-input',type:'RUN',month:'',dryRun:!!dry,files},'*');
     addIconLog('ICON 확장 프로그램에 전달했습니다. 새 ICON 탭에서 입력이 진행됩니다.','info');
   }catch(e){ addIconLog('파일 준비 실패: '+e.message,'err'); finishIconRun(null); }
 }
@@ -2741,7 +2754,7 @@ function renderRate(){
   }
 }
 
-function openRateFolder(id){ if(rateOpenId!==id){ rateMonth=''; rateShipper=''; } rateOpenId=id; renderRate(); }
+function openRateFolder(id){ if(rateOpenId!==id){ rateMonth=''; rateShipper=''; rateChecked=new Set(); } rateOpenId=id; renderRate(); }
 function closeRateFolder(){ rateOpenId=null; renderRate(); }
 
 function openAvatarEditor(id){
