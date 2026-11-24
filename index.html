@@ -207,6 +207,49 @@ td.del-cell{text-align:center;vertical-align:middle}
 #toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:#fff;font-size:13px;padding:10px 20px;border-radius:20px;opacity:0;pointer-events:none;transition:all .25s;z-index:999;white-space:nowrap}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .cell-memo{font-size:12px;color:var(--text2);font-style:italic}
+
+/* ── GUIDE 운임 계산기 ── */
+.guide-wrap{display:grid;grid-template-columns:360px minmax(0,1fr);gap:16px;align-items:start}
+.guide-left{position:sticky;top:112px;max-height:calc(100vh - 124px);overflow:auto;display:flex;flex-direction:column;gap:12px;padding-bottom:4px}
+.g-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 16px}
+.g-title{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-year{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600}
+.cal-nav{width:30px;height:30px;border:1px solid var(--border2);border-radius:var(--r-sm);background:var(--surface2);cursor:pointer;color:var(--text2);font-size:14px}
+.cal-nav:hover{background:var(--border)}
+.cal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.cal-m{height:44px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface2);font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text3);cursor:not-allowed;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.1}
+.cal-m small{font-size:9px;font-weight:500;letter-spacing:.02em}
+.cal-m.has{background:var(--surface);color:var(--text);border-color:var(--border2);cursor:pointer;font-weight:600}
+.cal-m.has small{color:var(--green)}
+.cal-m.has:hover{border-color:var(--text3);background:#faf9f5}
+.cal-m.on{background:var(--text);color:#fff;border-color:var(--text)}
+.cal-m.on small{color:#bfe3c0}
+.cal-m.today{box-shadow:inset 0 0 0 1.5px #e8c47a}
+.g-info{font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6;word-break:break-all}
+.g-upload{width:100%;height:34px;margin-top:10px;border:1px dashed var(--border2);border-radius:var(--r-sm);background:transparent;color:var(--text2);font-family:'Noto Sans KR',sans-serif;font-size:12px;cursor:pointer}
+.g-upload:hover{background:var(--surface2);border-color:var(--text3)}
+.g-seg{display:flex;gap:4px;flex-wrap:wrap}
+.g-seg .tab-btn{padding:6px 14px;font-size:12px}
+.g-row{display:flex;align-items:center;gap:8px;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap}
+.lane-wrap{border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+table.lane-tbl{min-width:0;table-layout:auto;font-size:12px}
+.lane-tbl thead th{padding:6px 8px;font-size:10px;text-align:center}
+.lane-tbl thead th:last-child{text-align:center}
+.lane-tbl td{padding:7px 8px;font-size:12px}
+.lane-tbl td.pol{font-weight:600;background:var(--surface2);white-space:pre-line;vertical-align:middle}
+.lane-tbl td.pod{white-space:pre-line;vertical-align:middle}
+.lane-tbl td.num{text-align:right;font-family:'JetBrains Mono',monospace;cursor:pointer}
+.lane-tbl tr.lane td.pod{cursor:pointer}
+.lane-tbl tr.lane:hover td.pod,.lane-tbl tr.lane:hover td.num{background:#f3efe4}
+.lane-tbl tr.lane.sel td.pod,.lane-tbl tr.lane.sel td.num{background:var(--green-bg);color:var(--green);font-weight:600}
+.lane-tbl tr.lane.na td.pod,.lane-tbl tr.lane.na td.num{color:var(--text3);cursor:not-allowed}
+.g-remark{font-size:11px;color:var(--text2);margin-top:8px;line-height:1.6;white-space:pre-line}
+.g-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:10px 16px;margin-bottom:12px;font-size:13px;color:var(--green)}
+.g-banner b{font-weight:700}
+.g-banner .g-chip{font-size:11px;background:#fff;border:1px solid var(--green-bd);border-radius:10px;padding:1px 8px;color:var(--text2)}
+.g-empty{background:var(--surface);border:1px dashed var(--border2);border-radius:var(--r);padding:48px 20px;text-align:center;color:var(--text3);font-size:13px;line-height:1.8}
+@media(max-width:1100px){.guide-wrap{grid-template-columns:1fr}.guide-left{position:static;max-height:none}}
 </style>
 </head>
 <body>
@@ -321,7 +364,43 @@ CREATE POLICY "public_all" ON estimates FOR ALL USING (true) WITH CHECK (true);<
     <button class="tab-btn active" id="tab-calc" onclick="switchTab('calc')">📋 현재 견적</button>
     <button class="tab-btn" id="tab-side" onclick="switchTab('side')">⚖️ 나란히 비교</button>
     <button class="tab-btn" id="tab-history" onclick="switchTab('history')">📁 저장된 견적</button>
+    <button class="tab-btn" id="tab-guide" onclick="switchTab('guide')">🧭 GUIDE 운임 계산기</button>
     <button class="tab-btn" id="tab-compare" onclick="closeCompareTab()" style="display:none">📊 요약 비교: <span id="compare-title-label"></span> ✕</button>
+  </div>
+
+  <!-- GUIDE 운임 계산기 탭 -->
+  <div id="pane-guide" style="display:none">
+    <div class="guide-wrap">
+      <div class="guide-left">
+        <div class="g-card">
+          <div class="g-title">📅 GUIDE 월 선택</div>
+          <div class="cal-head">
+            <button class="cal-nav" onclick="guideYearNav(-1)">‹</button>
+            <span class="cal-year" id="g-year"></span>
+            <button class="cal-nav" onclick="guideYearNav(1)">›</button>
+          </div>
+          <div class="cal-grid" id="g-cal"></div>
+          <div class="g-info" id="g-info"></div>
+          <button class="g-upload" onclick="document.getElementById('g-file').click()">📤 GUIDE 엑셀 올리기</button>
+          <input type="file" id="g-file" accept=".xlsx,.xls" style="display:none" onchange="onGuideFile(this)">
+        </div>
+        <div class="g-card" id="g-lane-card" style="display:none">
+          <div class="g-row">
+            <div class="g-seg" id="g-ctry"></div>
+            <div class="g-seg">
+              <button class="tab-btn" id="g-dry" onclick="setGuideType('DRY')">DRY</button>
+              <button class="tab-btn" id="g-rf" onclick="setGuideType('RF')">RF</button>
+            </div>
+          </div>
+          <div class="lane-wrap"><table class="lane-tbl" id="g-lanes"></table></div>
+          <div class="g-remark" id="g-remark"></div>
+        </div>
+      </div>
+      <div id="guide-right">
+        <div class="g-banner" id="g-banner" style="display:none"></div>
+        <div class="g-empty" id="g-empty">왼쪽에서 월과 나라를 고른 뒤 POL / POD를 클릭하면<br>그 구간의 GUIDE 운임이 현재 견적으로 나옵니다.</div>
+      </div>
+    </div>
   </div>
 
   <!-- 현재 견적 탭 -->
@@ -776,7 +855,10 @@ function adj(type,delta){
   render();
 }
 function switchTab(tab){
-  document.getElementById('pane-calc').style.display    = tab==='calc'    ?'block':'none';
+  placeCalcPane(tab==='guide');
+  document.getElementById('pane-calc').style.display    = (tab==='calc'||(tab==='guide'&&guideLane)) ?'block':'none';
+  document.getElementById('pane-guide').style.display   = tab==='guide'   ?'block':'none';
+  document.getElementById('tab-guide').className  = 'tab-btn'+(tab==='guide' ?' active':'');
   document.getElementById('pane-side').style.display    = tab==='side'    ?'block':'none';
   document.getElementById('pane-history').style.display = tab==='history' ?'block':'none';
   document.getElementById('pane-compare').style.display = tab==='compare' ?'block':'none';
@@ -785,7 +867,8 @@ function switchTab(tab){
   document.getElementById('tab-history').className = 'tab-btn'+(tab==='history' ?' active':'');
   document.getElementById('tab-compare').className = 'tab-btn'+(tab==='compare' ?' active':'');
   // 나란히 비교 탭이면 full width
-  document.body.classList.toggle('side-mode', tab==='side'||tab==='compare');
+  document.body.classList.toggle('side-mode', tab==='side'||tab==='compare'||tab==='guide');
+  if(tab==='guide')   openGuide();
   if(tab==='history') loadEstimates();
   if(tab==='compare') renderCompare();
   if(tab==='side')    refreshSideTplSelects();
@@ -1795,6 +1878,290 @@ async function deleteEstimate(id){
     showToast('삭제됨');
     loadEstimates();
   }catch(e){showToast('삭제 실패: '+e.message);}
+}
+
+/* ══════════════════════════════════════════
+   GUIDE 운임 계산기
+   - guide_rates      : id='YYYY-MM', data=엑셀에서 읽은 구간·운임
+   - guide_surcharges : id='YYYY-MM', data={lanes:{'나라|POL|POD':{rows:[...]}}} (ebiz 기준 Surcharge, 있을 때만)
+══════════════════════════════════════════ */
+const GUIDE_COUNTRIES=['중국','일본','동남아'];
+const XLSX_CDN='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+let guideData={}, guideSur={}, guideLoaded=false;
+let guideYear=new Date().getFullYear(), guideYm='', guideCtry='중국', guideType='DRY', guideLane=null;
+
+function placeCalcPane(inGuide){
+  const pc=document.getElementById('pane-calc');
+  if(inGuide){
+    const host=document.getElementById('guide-right');
+    if(pc.parentNode!==host) host.appendChild(pc);
+  }else{
+    const side=document.getElementById('pane-side');
+    if(pc.nextElementSibling!==side) side.parentNode.insertBefore(pc,side);
+  }
+}
+
+async function openGuide(){
+  if(!guideLoaded) await loadGuideData();
+  renderGuide();
+}
+
+async function loadGuideData(){
+  try{
+    const data=await sbGet('guide_rates','?select=*&order=id');
+    guideData={}; data.forEach(r=>guideData[r.id]=r);
+    guideLoaded=true;
+  }catch(e){
+    guideData={};
+    const msg=String(e.message||e);
+    document.getElementById('g-info').innerHTML=/guide_rates|does not exist|PGRST/.test(msg)
+      ?'<span style="color:#c0392b">Supabase에 guide_rates 표가 아직 없습니다. SQL을 먼저 실행해 주세요.</span>'
+      :'<span style="color:#c0392b">GUIDE 불러오기 실패: '+esc(msg)+'</span>';
+    return;
+  }
+  try{
+    const sur=await sbGet('guide_surcharges','?select=*');
+    guideSur={}; sur.forEach(r=>guideSur[r.id]=r);
+  }catch(e){ guideSur={}; }
+  if(!guideYm){
+    const ids=Object.keys(guideData).sort();
+    const now=new Date();
+    const next=`${now.getMonth()===11?now.getFullYear()+1:now.getFullYear()}-${String((now.getMonth()+1)%12+1).padStart(2,'0')}`;
+    const pick=ids.filter(id=>id<=next).pop()||ids[ids.length-1];
+    if(pick){ guideYm=pick; guideYear=+pick.slice(0,4); }
+  }
+}
+
+function guideYearNav(d){ guideYear+=d; renderGuideCal(); }
+
+function renderGuide(){
+  renderGuideCal();
+  renderGuideLanes();
+}
+
+function renderGuideCal(){
+  document.getElementById('g-year').textContent=guideYear+'년';
+  const now=new Date(), todayYm=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  let h='';
+  for(let m=1;m<=12;m++){
+    const ym=`${guideYear}-${String(m).padStart(2,'0')}`;
+    const has=!!guideData[ym];
+    const cls='cal-m'+(has?' has':'')+(ym===guideYm?' on':'')+(ym===todayYm?' today':'');
+    h+=`<button class="${cls}" ${has?`onclick="selectGuideMonth('${ym}')"`:'disabled'}>${m}월${has?'<small>GUIDE</small>':''}</button>`;
+  }
+  document.getElementById('g-cal').innerHTML=h;
+  const info=document.getElementById('g-info');
+  const g=guideData[guideYm];
+  if(g){
+    const d=g.data||{};
+    const t=g.updated_at?new Date(g.updated_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    info.innerHTML=`<b style="color:var(--text2)">${+guideYm.slice(0,4)%100}년 ${+guideYm.slice(5)}월 GUIDE</b>`
+      +(d.asof?` · 기준일 ${esc(d.asof)}`:'')+`<br>${esc(g.file_name||'')}`
+      +(g.uploaded_by||t?`<br>올린 사람 ${esc(g.uploaded_by||'')} ${t}`:'');
+  }else if(guideLoaded){
+    info.textContent=Object.keys(guideData).length?'GUIDE가 있는 월(진하게 표시)을 고르세요.':'아직 올라온 GUIDE가 없습니다. 아래 버튼으로 엑셀을 올려 주세요.';
+  }
+}
+
+function selectGuideMonth(ym){
+  guideYm=ym; guideLane=null;
+  hideGuideQuote();
+  renderGuide();
+}
+
+function setGuideCtry(c){ guideCtry=c; guideLane=null; hideGuideQuote(); renderGuideLanes(); }
+function setGuideType(t){
+  guideType=t;
+  const keep=guideLane;
+  renderGuideLanes();
+  if(keep!=null){
+    const sec=curGuideSection(), lane=sec&&sec.rows[keep];
+    if(lane&&laneRates(lane,sec)) loadGuideLane(keep); else { guideLane=null; hideGuideQuote(); renderGuideLanes(); }
+  }
+}
+
+function curGuideSection(){
+  const g=guideData[guideYm]; if(!g) return null;
+  return (g.data.sections||[]).find(s=>s.name===guideCtry)||null;
+}
+
+/* DRY = 1,2번째 운임 칸, RF = 3,4번째 운임 칸 */
+function laneRates(lane,sec){
+  const o=guideType==='RF'?2:0;
+  const p20=lane.r[o], p40=lane.r[o+1];
+  if(p20==null&&p40==null) return null;
+  return {p20, p40, h20:sec.cols[o]||'20', h40:sec.cols[o+1]||'40'};
+}
+
+function renderGuideLanes(){
+  const card=document.getElementById('g-lane-card');
+  const g=guideData[guideYm];
+  if(!g){ card.style.display='none'; return; }
+  card.style.display='block';
+  const secs=(g.data.sections||[]).map(s=>s.name);
+  document.getElementById('g-ctry').innerHTML=GUIDE_COUNTRIES.map(c=>
+    `<button class="tab-btn${c===guideCtry?' active':''}" ${secs.includes(c)?`onclick="setGuideCtry('${c}')"`:'disabled style="opacity:.4;cursor:not-allowed"'}>${c}</button>`).join('');
+  document.getElementById('g-dry').className='tab-btn'+(guideType==='DRY'?' active':'');
+  document.getElementById('g-rf').className='tab-btn'+(guideType==='RF'?' active':'');
+  const sec=curGuideSection(), tbl=document.getElementById('g-lanes'), rm=document.getElementById('g-remark');
+  if(!sec){ tbl.innerHTML='<tbody><tr><td style="padding:20px;text-align:center;color:var(--text3)">이 달 GUIDE에 '+esc(guideCtry)+' 구간이 없습니다</td></tr></tbody>'; rm.textContent=''; return; }
+  const o=guideType==='RF'?2:0;
+  let h=`<thead><tr><th>POL</th><th>POD</th><th>${esc(sec.cols[o]||'20')}</th><th>${esc(sec.cols[o+1]||'40')}</th></tr></thead><tbody>`;
+  sec.rows.forEach((l,i)=>{
+    const rt=laneRates(l,sec);
+    const cls='lane'+(i===guideLane?' sel':'')+(rt?'':' na');
+    const click=rt?`onclick="loadGuideLane(${i})"`:`onclick="showToast('이 구간은 ${guideType} 운임이 없습니다')"`;
+    const n=v=>v==null?'—':Number(v).toLocaleString('en-US');
+    h+=`<tr class="${cls}">`
+      +(l.polSpan?`<td class="pol" rowspan="${l.polSpan}">${esc(l.pol)}</td>`:'')
+      +(l.podSpan?`<td class="pod" rowspan="${l.podSpan}" ${click}>${esc(l.pod)}</td>`:'')
+      +`<td class="num" ${click}>${n(l.r[o])}</td><td class="num" ${click}>${n(l.r[o+1])}</td></tr>`;
+  });
+  tbl.innerHTML=h+'</tbody>';
+  const rem=[...new Set(sec.rows.map(l=>l.remark).filter(Boolean))];
+  rm.textContent=rem.join('\n');
+}
+
+function splitSurNames(s){
+  return String(s||'').split(/[\/,]/).map(x=>x.trim().toUpperCase()).filter(x=>x&&x!=='-');
+}
+
+function loadGuideLane(i){
+  const sec=curGuideSection(); if(!sec) return;
+  const lane=sec.rows[i], rt=laneRates(lane,sec);
+  if(!rt) return;
+  guideLane=i;
+  const ymLabel=`${+guideYm.slice(0,4)%100}년 ${+guideYm.slice(5)}월`;
+  const newRows=[{name:'O/F',cur:'USD',p20:rt.p20||0,q20:0,p40:rt.p40||0,q40:0,basis:'CTN',price:0,
+    memo:`GUIDE ${ymLabel} ${guideType} (${rt.h20}/${rt.h40})`}];
+  const key=`${sec.name}|${lane.pol}|${lane.pod}`;
+  const sur=guideSur[guideYm]&&guideSur[guideYm].data&&guideSur[guideYm].data.lanes&&guideSur[guideYm].data.lanes[key];
+  let surNote;
+  if(sur&&Array.isArray(sur.rows)&&sur.rows.length){
+    sur.rows.forEach(r=>newRows.push({name:r.name,cur:r.cur||'USD',p20:+r.p20||0,q20:0,p40:+r.p40||0,q40:0,
+      basis:r.basis==='BL'?'BL':'CTN',price:+r.price||0,memo:r.memo||'ebiz'}));
+    surNote=`Surcharge: ebiz ${esc(sur.date||'')}`;
+  }else{
+    const seen=new Set();
+    [['POL',lane.polSur],['POD',lane.podSur]].forEach(([side,s])=>splitSurNames(s).forEach(n=>{
+      if(seen.has(n)) return; seen.add(n);
+      newRows.push({name:n,cur:'USD',p20:0,q20:0,p40:0,q40:0,basis:'CTN',price:0,memo:`${side} Surcharge (금액 입력)`});
+    }));
+    surNote='Surcharge 금액 미입력 (ebiz 데이터 없음)';
+  }
+  rows=newRows;
+  const ban=document.getElementById('g-banner');
+  ban.style.display='flex';
+  ban.innerHTML=`<b>${esc(lane.pol.replace(/\n/g,' '))} → ${esc(lane.pod.replace(/\n/g,' '))}</b>`
+    +`<span class="g-chip">${esc(sec.name)} · ${ymLabel} GUIDE · ${guideType}</span>`
+    +(lane.polSur&&lane.polSur!=='-'?`<span class="g-chip">POL Surcharge: ${esc(lane.polSur)}</span>`:'')
+    +(lane.podSur&&lane.podSur!=='-'?`<span class="g-chip">POD Surcharge: ${esc(lane.podSur)}</span>`:'')
+    +`<span class="g-chip">${surNote}</span>`;
+  document.getElementById('g-empty').style.display='none';
+  document.getElementById('pane-calc').style.display='block';
+  render();
+  renderGuideLanes();
+}
+
+function hideGuideQuote(){
+  document.getElementById('g-banner').style.display='none';
+  document.getElementById('g-empty').style.display='block';
+  if(document.getElementById('tab-guide').classList.contains('active'))
+    document.getElementById('pane-calc').style.display='none';
+}
+
+/* ── 엑셀 올리기 ── */
+function loadXlsxLib(){
+  if(window.XLSX) return Promise.resolve();
+  return new Promise((ok,ng)=>{
+    const sc=document.createElement('script'); sc.src=XLSX_CDN;
+    sc.onload=()=>ok(); sc.onerror=()=>ng(new Error('엑셀 라이브러리 로드 실패'));
+    document.head.appendChild(sc);
+  });
+}
+
+function guideYmFromName(name){
+  const m=String(name).match(/(\d{2,4})\s*년\s*(\d{1,2})\s*월/);
+  if(!m) return '';
+  let y=+m[1]; if(y<100) y+=2000;
+  const mo=+m[2]; if(mo<1||mo>12) return '';
+  return `${y}-${String(mo).padStart(2,'0')}`;
+}
+
+function parseGuideSheet(ws){
+  const A=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true,blankrows:true});
+  const cover={}, spanN={};
+  (ws['!merges']||[]).forEach(m=>{
+    const v=(A[m.s.r]||[])[m.s.c];
+    spanN[m.s.r+','+m.s.c]=m.e.r-m.s.r+1;
+    for(let r=m.s.r;r<=m.e.r;r++){ A[r]=A[r]||[]; for(let c=m.s.c;c<=m.e.c;c++){
+      A[r][c]=v; if(r!==m.s.r) cover[r+','+c]=1; } }
+  });
+  const str=v=>v==null?'':String(v).trim();
+  const num=v=>{ if(v==null||v==='') return null; const n=typeof v==='number'?v:parseFloat(String(v).replace(/[,$\s]/g,'')); return isFinite(n)?n:null; };
+  const cell=(r,c)=>(A[r]||[])[c];
+  let asof=cell(0,0);
+  asof=typeof asof==='number'?XLSX.SSF.format('yyyy.mm.dd',asof):str(asof);
+  const sections=[];
+  for(let r=0;r<A.length;r++){
+    const name=str(cell(r,0));
+    if(!name||name==='POL'||str(cell(r+1,0))!=='POL') continue;
+    const hdr=r+1, cols=[2,3,4,5].map(c=>str(cell(hdr,c)));
+    let rr=hdr+1;
+    if([2,3,4,5].some(c=>/OCF/i.test(str(cell(rr,c))))) rr++;
+    const rows=[];
+    let lastPol='', lastPod='';
+    for(;rr<A.length;rr++){
+      if(str(cell(rr+1,0))==='POL') break;
+      const vals=[0,1,2,3,4,5].map(c=>str(cell(rr,c)));
+      if(vals.every(v=>!v)) break;
+      const pol=str(cell(rr,0))||lastPol, pod=str(cell(rr,1))||lastPod;
+      lastPol=pol; lastPod=pod;
+      rows.push({
+        pol, pod,
+        polSpan: cover[rr+',0']?0:(spanN[rr+',0']||1),
+        podSpan: cover[rr+',1']?0:(spanN[rr+',1']||1),
+        r:[2,3,4,5].map(c=>num(cell(rr,c))),
+        polSur:str(cell(rr,6)), podSur:str(cell(rr,7)), remark:str(cell(rr,8))
+      });
+    }
+    /* 표 끝에서 잘린 병합(rowspan)이 표 밖으로 넘지 않게 보정 */
+    rows.forEach((l,i)=>{
+      if(l.polSpan>rows.length-i) l.polSpan=rows.length-i;
+      if(l.podSpan>rows.length-i) l.podSpan=rows.length-i;
+    });
+    if(rows.length) sections.push({name, cols, rows});
+    r=rr-1;
+  }
+  return {asof, sections};
+}
+
+async function onGuideFile(input){
+  const f=input.files&&input.files[0]; input.value='';
+  if(!f) return;
+  try{
+    await loadXlsxLib();
+    const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+    const parsed=parseGuideSheet(wb.Sheets[wb.SheetNames[0]]);
+    if(!parsed.sections.length){ showToast('GUIDE 표(POL/POD)를 찾지 못했습니다'); return; }
+    let ym=guideYmFromName(f.name);
+    if(!ym){
+      ym=(prompt('파일 이름에서 연/월을 찾지 못했습니다. 적용 월을 입력하세요 (예: 2026-12)')||'').trim();
+      if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(ym)){ showToast('월 형식이 올바르지 않습니다'); return; }
+    }
+    const label=`${+ym.slice(0,4)%100}년 ${+ym.slice(5)}월`;
+    const found=parsed.sections.map(s=>`${s.name} ${s.rows.length}`).join(', ');
+    if(guideData[ym]&&!confirm(`${label} GUIDE가 이미 있습니다. 새 파일로 바꿀까요?\n(${found})`)) return;
+    const rec={id:ym,data:parsed,file_name:f.name,uploaded_by:MY_NAME,updated_at:new Date().toISOString()};
+    await sbUpsert('guide_rates',rec);
+    guideData[ym]=rec; guideLoaded=true;
+    guideYm=ym; guideYear=+ym.slice(0,4); guideLane=null;
+    hideGuideQuote(); renderGuide();
+    showToast(`${label} GUIDE 저장 완료 (${found})`);
+  }catch(e){
+    const msg=String(e.message||e);
+    showToast(/guide_rates|does not exist|PGRST/.test(msg)?'Supabase에 guide_rates 표가 없습니다 (SQL 실행 필요)':'GUIDE 올리기 실패: '+msg);
+  }
 }
 
 /* ══════════════════════════════════════════
